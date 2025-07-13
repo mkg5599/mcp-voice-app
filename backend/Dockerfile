@@ -1,0 +1,24 @@
+
+# Use an official Python runtime as a parent image
+FROM python:3.13-slim
+
+# Set the working directory in the container
+WORKDIR /app
+
+# Install poetry
+RUN pip install poetry
+
+# Copy the project files into the container
+COPY pyproject.toml poetry.lock ./
+
+# Install project dependencies
+RUN poetry config virtualenvs.create false && poetry install --no-root
+
+# Copy the rest of the application's code
+COPY . .
+
+# Expose the port the app runs on
+EXPOSE 8000
+
+# Run the application
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

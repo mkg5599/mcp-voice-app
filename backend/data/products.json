@@ -1,0 +1,23 @@
+
+[
+  { "id": 1,  "name": "Classic Black Hoodie",           "colors": ["black"],        "price": 39.90, "city": "Portland" },
+  { "id": 2,  "name": "Sunset Graphic Tee",             "colors": ["orange","red"], "price": 24.50, "city": "Seattle"  },
+  { "id": 3,  "name": "Ocean Breeze Shorts",            "colors": ["blue"],         "price": 29.99, "city": "San Diego"},
+  { "id": 4,  "name": "Forest Green Jacket",            "colors": ["green"],        "price": 59.00, "city": "Portland" },
+  { "id": 5,  "name": "Monochrome Sneakers",            "colors": ["black","white"],"price": 69.00, "city": "Austin"   },
+  { "id": 6,  "name": "Crimson Running Cap",            "colors": ["red"],          "price": 18.75, "city": "Denver"   },
+  { "id": 7,  "name": "Pastel Yellow Hoodie",           "colors": ["yellow"],       "price": 42.00, "city": "Miami"    },
+  { "id": 8,  "name": "Midnight Blue Joggers",          "colors": ["blue"],         "price": 35.20, "city": "Portland" },
+  { "id": 9,  "name": "Charcoal Beanie",                "colors": ["black","gray"], "price": 12.00, "city": "Chicago"  },
+  { "id": 10, "name": "Rose Pink Sweatshirt",           "colors": ["pink"],         "price": 34.99, "city": "Phoenix"  },
+  { "id": 11, "name": "Lime Sport Socks",               "colors": ["green"],        "price":  7.50, "city": "Seattle"  },
+  { "id": 12, "name": "Slate Tech Gloves",              "colors": ["gray"],         "price": 16.00, "city": "Boston"   },
+  { "id": 13, "name": "Ivory Summer Dress",             "colors": ["white"],        "price": 48.00, "city": "Los Angeles"},
+  { "id": 14, "name": "Amber Hiking Backpack",          "colors": ["orange"],       "price": 79.99, "city": "Denver"   },
+  { "id": 15, "name": "Ebony Leather Belt",             "colors": ["black"],        "price": 22.00, "city": "Austin"   },
+  { "id": 16, "name": "Royal Blue Windbreaker",         "colors": ["blue"],         "price": 52.95, "city": "Portland" },
+  { "id": 17, "name": "Sandstone Chinos",               "colors": ["brown"],        "price": 45.00, "city": "Chicago"  },
+  { "id": 18, "name": "Scarlet Fitness Tank",           "colors": ["red"],          "price": 26.00, "city": "Miami"    },
+  { "id": 19, "name": "Olive Cargo Pants",              "colors": ["green"],        "price": 44.50, "city": "Phoenix"  },
+  { "id": 20, "name": "Snowfield Knit Scarf",           "colors": ["white"],        "price": 14.99, "city": "Boston"   }
+]
