@@ -1,37 +1,36 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from "react";
+import { Product } from "../types/product";
+import SearchPromptModal from "../components/SearchPromptModal";
 
-interface Product {
-  id: number;
-  name: string;
-  colors: string[];
-  price: number;
-  city: string;
-}
+const formatPrice = (p: number) =>
+  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
+    p,
+  );
 
-// Helper function to format price
-const formatPrice = (price: number) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-  }).format(price);
-};
-
-// ProductCard component
 const ProductCard = ({ product }: { product: Product }) => (
-  <div className="border rounded-lg p-4 shadow-sm transition-all duration-300 ease-in-out hover:shadow-md">
-    <div className="flex justify-between items-start mb-2">
-      <h3 className="font-bold text-lg text-gray-800">{product.name}</h3>
-      <span className="font-semibold text-blue-600 bg-blue-100 px-2 py-1 rounded-full text-sm">{formatPrice(product.price)}</span>
+  <div className="rounded-lg border p-4 shadow-sm transition hover:shadow-md">
+    <div className="mb-2 flex items-start justify-between">
+      <h3 className="text-lg font-bold text-gray-800">{product.name}</h3>
+      <span className="rounded-full bg-blue-100 px-2 py-1 text-sm font-semibold text-blue-600">
+        {formatPrice(product.price)}
+      </span>
     </div>
-    <div className="text-sm text-gray-600 space-y-1">
-      <p><span className="font-semibold">City:</span> {product.city}</p>
+    <div className="space-y-1 text-sm text-gray-600">
+      <p>
+        <span className="font-semibold">City:</span> {product.city}
+      </p>
       <div className="flex items-center">
-        <span className="font-semibold mr-2">Colors:</span>
+        <span className="mr-2 font-semibold">Colors:</span>
         <div className="flex gap-2">
-          {product.colors.map(color => (
-            <span key={color} className="w-5 h-5 rounded-full border border-gray-300" style={{ backgroundColor: color }} title={color}></span>
+          {product.colors.map((c) => (
+            <span
+              key={c}
+              className="h-5 w-5 rounded-full border border-gray-300"
+              style={{ backgroundColor: c }}
+              title={c}
+            />
           ))}
         </div>
       </div>
@@ -39,53 +38,51 @@ const ProductCard = ({ product }: { product: Product }) => (
   </div>
 );
 
-// Main component
+
 export default function Home() {
   const [products, setProducts] = useState<Product[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [searchText, setSearchText] = useState("");
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
 
+  async function handleSearch(query: string) {
+    setIsLoading(true);
+    try {
+      const r = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text: query }),
+      });
+      const data = await r.json();
+      if (r.ok) {
+        if (data.products) setProducts(data.products);
+        else setProducts([]);
+      } else console.error("chat error", data.error);
+    } catch (e) {
+      console.error("fetch error", e);
+      setProducts([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  /* initial load */
   useEffect(() => {
-    const fetchProducts = async () => {
-      setIsLoading(true);
-      try {
-        const response = await fetch('/api/chat', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ text: 'list all products' }), // Initial prompt to LLM
-        });
-        const chatData = await response.json();
-        if (response.ok) {
-          try {
-            const productsFromLLM = JSON.parse(chatData.response);
-            if (Array.isArray(productsFromLLM)) {
-              setProducts(productsFromLLM);
-            }
-          } catch (error: unknown) {
-            console.log("Initial LLM message:", chatData.response, error instanceof Error ? error.message : error);
-            setProducts([]); // No products if LLM returns a message
-          }
-        } else {
-          console.error('Initial chat error:', chatData.error);
-          setProducts([]);
-        }
-      } catch (error) {
-        console.error('Error fetching initial products:', error);
-        setProducts([]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchProducts();
+    handleSearch("list all products");
   }, []);
 
+  const onPromptSelect = (prompt: string) => {
+    setSearchText(prompt);
+    handleSearch(prompt);
+  };
+
   const handleMicClick = () => {
+    console.log('Mic button clicked. Current recording state:', isRecording);
     if (isRecording) {
       if (mediaRecorderRef.current) {
         mediaRecorderRef.current.stop();
+        console.log('MediaRecorder stopped.');
       }
       setIsRecording(false);
     } else {
@@ -94,23 +91,31 @@ export default function Home() {
           const mediaRecorder = new MediaRecorder(stream);
           mediaRecorderRef.current = mediaRecorder;
           mediaRecorder.start();
+          console.log('MediaRecorder started.');
 
           const audioChunks: Blob[] = [];
           mediaRecorder.addEventListener("dataavailable", (event: BlobEvent) => {
             audioChunks.push(event.data);
+            console.log('Audio data available:', event.data.size, 'bytes');
           });
 
           mediaRecorder.addEventListener("stop", () => {
+            console.log('MediaRecorder data collection stopped. Total chunks:', audioChunks.length);
             const audioBlob = new Blob(audioChunks);
+            console.log('Audio Blob created:', audioBlob.size, 'bytes', audioBlob.type);
             sendAudioToServer(audioBlob);
           });
 
           setIsRecording(true);
+        })
+        .catch(err => {
+          console.error('Error accessing microphone:', err);
         });
     }
   };
 
   const sendAudioToServer = async (audioBlob: Blob) => {
+    console.log('Sending audio to transcribe API...');
     const formData = new FormData();
     formData.append('file', audioBlob, 'recording.webm');
 
@@ -121,34 +126,9 @@ export default function Home() {
       });
       const data = await response.json();
       if (response.ok) {
+        console.log('Transcription API response:', data);
         console.log('Transcription:', data.text);
-        // Send transcribed text to backend for LLM processing
-        const chatResponse = await fetch('/api/chat', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ text: data.text }),
-        });
-        const chatData = await chatResponse.json();
-        if (chatResponse.ok) {
-          console.log('Chat Response:', chatData.response);
-          // Assuming chatData.response contains the filtered products or a message
-          // For now, let's just log it. In a real app, you'd parse and update products.
-          // If the LLM returns a tool call result, it will be a JSON string of products.
-          try {
-            const productsFromLLM = JSON.parse(chatData.response);
-            if (Array.isArray(productsFromLLM)) {
-              setProducts(productsFromLLM);
-            }
-          } catch (_error: unknown) {
-            // If it's not JSON, it's likely a message from the LLM
-            console.log("LLM message:", chatData.response, _error instanceof Error ? _error.message : _error);
-            // You might want to display this message to the user
-          }
-        } else {
-          console.error('Chat error:', chatData.error);
-        }
+        handleSearch(data.text);
       } else {
         console.error('Transcription error:', data.error);
       }
@@ -157,44 +137,52 @@ export default function Home() {
     }
   };
 
+
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-sm sticky top-0 z-10">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <h1 className="text-2xl font-bold text-gray-900">Product Catalog</h1>
-            <div className="w-full max-w-md flex items-center">
-              <input
-                type="text"
-                placeholder="Search products..."
-                className="w-full px-4 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <button
-                onClick={handleMicClick}
-                className={`px-4 py-2 border border-gray-300 rounded-r-md ${isRecording ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-600'} hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500`}
-              >
-                🎤
-              </button>
-            </div>
+      <header className="sticky top-0 z-10 bg-white shadow-sm">
+        <div className="container mx-auto flex items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
+          <h1 className="text-2xl font-bold text-gray-900">Product Catalog</h1>
+
+          <div className="flex w-full max-w-md items-center gap-2">
+            <input
+              type="text"
+              placeholder="Search products..."
+              className="w-full rounded-l-md border border-gray-300 px-4 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleSearch(searchText);
+              }}
+            />
+            <button
+              onClick={handleMicClick}
+              className={`rounded-r-md border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${isRecording
+                  ? "bg-red-500 text-white"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+            >
+              🎤
+            </button>
           </div>
         </div>
       </header>
 
-      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="container mx-auto px-4 py-8 sm:px-6 lg:px-8">
+        <div className="mb-4">
+          <SearchPromptModal onSelect={onPromptSelect} />
+        </div>
+
         {isLoading ? (
-          <div className="text-center text-gray-500">
-            <p>Loading products...</p>
-          </div>
-        ) : products.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {products.map(product => (
-              <ProductCard key={product.id} product={product} />
+          <p className="text-center text-gray-500">Loading products...</p>
+        ) : products.length ? (
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+            {products.map((p) => (
+              <ProductCard key={p.id} product={p} />
             ))}
           </div>
         ) : (
-          <div className="text-center text-gray-500">
-            <p>No products found.</p>
-          </div>
+          <p className="text-center text-gray-500">No products found.</p>
         )}
       </main>
     </div>

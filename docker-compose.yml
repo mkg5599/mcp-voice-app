@@ -11,11 +11,14 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        - GEMINI_API_KEY=${GEMINI_API_KEY}
     ports:
       - "3000:3000"
     volumes:
-      - ./frontend:/app
       - /app/node_modules
       - /app/.next
     environment:
       - NEXT_PUBLIC_API_URL=http://backend:8000
+      - NEXT_PUBLIC_MCP_URL=http://backend:8000/mcp   # <- add
+      - GEMINI_API_KEY=${GEMINI_API_KEY}

@@ -1,46 +1,44 @@
+# MCP Voice App
 
-# MCP Voice Demo
+This is a full-stack application demonstrating product search and filtering using voice commands, powered by a Next.js (React + TypeScript) frontend and a FastAPI (Python) backend. It integrates with the Gemini API for natural language processing and function calling, and uses the Model-Context-Protocol (MCP) for backend function invocation.
 
-This is a demo application showcasing the use of the Model Context Protocol (MCP) with a Next.js frontend and a FastAPI backend. The application allows users to search for products using voice commands.
+## Getting Started
 
-## Setup
+For detailed setup, installation, and running instructions, please refer to the [SETUP.md](./SETUP.md) file.
 
-1.  **Clone the repository:**
+## Features
 
-    ```bash
-    git clone https://github.com/<your-github-username>/mcp-voice-demo.git
-    cd mcp-voice-demo
-    ```
+-   **Voice and Text Input:** Search for products using either spoken commands or typed text.
+-   **Gemini Integration:** Leverages the latest Gemini SDK for intelligent product filtering based on natural language queries.
+-   **Model-Context-Protocol (MCP):** Gemini model interacts with the backend API using the MCP standard for function calling, enabling robust and extensible backend integration.
+-   **Function Calling:** Gemini model calls backend functions (e.g., `list_products`, `search_products`) via the `/mcp` endpoint.
+-   **Responsive UI:** Product list displayed in a clean, responsive interface.
+-   **Dockerized Deployment:** Easily deployable using Docker Compose.
 
-2.  **Set up environment variables:**
+## Architecture
 
-    Create a `.env` file in the `frontend` directory and add the following:
+For a visual representation of the application's architecture, see the diagram in [SETUP.md](./SETUP.md#architecture-diagram).
 
-    ```
-    OPENAI_API_KEY=your-openai-api-key
-    ```
+## API Endpoints
 
-3.  **Install dependencies:**
+### Backend (FastAPI)
 
-    The application uses Docker Compose to manage the frontend and backend services. Make sure you have Docker and Docker Compose installed.
+-   `GET /products` — List all products.
+-   `POST /products/search` — Search and filter products by color, city, and price.
+-   `POST /mcp` — **MCP endpoint:** Accepts JSON-RPC 2.0 requests for `list_products` and `search_products`. Used by the Gemini model for function calling.
+-   `GET /.well-known/mcp.json` — MCP discovery endpoint describing available backend functions.
 
-## Local Development
+### Frontend (Next.js)
 
-To run the application locally, use the following command:
+-   `POST /api/chat` — Accepts user queries (text or voice), interacts with Gemini, and returns product results.
 
-```bash
-docker compose up
-```
+Refer to the [SETUP.md](./SETUP.md#api-endpoints) for a comprehensive list of frontend and backend API endpoints and their usage.
 
-This will start the Next.js frontend at `http://localhost:3000` and the FastAPI backend at `http://localhost:8000`.
+## Development
 
-## Voice Demo
+-   **Frontend:** Next.js 14, React, TypeScript, Tailwind CSS.
+-   **Backend:** FastAPI, Python 3.11+, MCP protocol.
 
-1.  Open the application in your browser at `http://localhost:3000`.
-2.  Click the microphone button to start recording your voice.
-3.  Speak a command, such as "Show me all the black hoodies" or "Find products in Portland."
-4.  The application will transcribe your voice command, send it to the backend, and display the filtered products.
+## Contributing
 
-## MCP
-
-The backend exposes a `/products` endpoint that can be used to filter products. The MCP discovery file is available at `http://localhost:8000/.well-known/mcp.json`.
+Contributions are welcome! Please refer to the [SETUP.md](./SETUP.md) for development environment setup and MCP integration details.

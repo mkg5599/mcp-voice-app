@@ -1,28 +1,27 @@
-
-import OpenAI from 'openai';
-import { NextResponse } from 'next/server';
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
-    const audioFile = formData.get('file');
+    const file = formData.get("file") as Blob | null;
 
-    if (!audioFile) {
-      return NextResponse.json({ error: 'No audio file provided' }, { status: 400 });
+    if (!file) {
+      return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
 
-    const transcription = await openai.audio.transcriptions.create({
-      file: audioFile as Blob,
-      model: 'whisper-1',
-    });
+    // This is a placeholder for a real transcription service.
+    // In a real application, you would use a service like AssemblyAI, Deepgram, or Google Speech-to-Text.
+    // For this example, we'll just return a dummy transcription.
+    const dummyTranscription = "show me black jackets under $75 in Seattle";
 
-    return NextResponse.json({ text: transcription.text });
+    return NextResponse.json({ text: dummyTranscription });
   } catch (error) {
-    console.error('Error transcribing audio:', error);
-    return NextResponse.json({ error: 'Failed to transcribe audio' }, { status: 500 });
+    console.error("Error in transcribe API:", error);
+    const errorMessage =
+      error instanceof Error ? error.message : "An unknown error occurred";
+    return NextResponse.json(
+      { error: "Failed to process transcription", details: errorMessage },
+      { status: 500 }
+    );
   }
 }
