@@ -9,6 +9,9 @@ from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from openai import OpenAI
 
+# Construct path to data file relative to this script
+backend_dir = os.path.dirname(os.path.abspath(__file__))
+products_json_path = os.path.join(backend_dir, "data", "products.json")
 
 app = FastAPI()
 
@@ -34,14 +37,13 @@ class ProductSearch(BaseModel):
 def read_root():
     return {"message": "Welcome to the FastAPI Backend!"}
 
-with open("data/products.json") as f:
-    products = json.load(f)
-
 @app.get("/products")
 def list_products():
     """
     List all products.
     """
+    with open(products_json_path) as f:
+        products = json.load(f)
     return products
 
 @app.post("/products/search")
@@ -49,6 +51,8 @@ def search_products(search_params: ProductSearch):
     """
     Search and filter products based on criteria (case-insensitive).
     """
+    with open(products_json_path) as f:
+        products = json.load(f)
     filtered_products = products
     if search_params.colors:
         filtered_products = [
@@ -118,13 +122,11 @@ def mcp_endpoint(req: JsonRpcRequest):
         )
 
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-@app.post("/transcribe")
 async def transcribe(file: UploadFile = File(...)):
     """
     Accepts multipart/form-data audio file and returns Whisper text.
     """
+    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     try:
         suffix = os.path.splitext(file.filename or "")[-1] or ".webm"
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:

@@ -9,14 +9,16 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "fastapi (>=0.116.1,<0.117.0)",
-    "uvicorn (>=0.35.0,<0.36.0)",
     "python-multipart (>=0.0.20,<0.0.21)",
     "openai (>=1.25.0)",
-    "python-dotenv (>=1.0.1)",
+    "python-dotenv (>=1.0.1)"
 ]
 
 [tool.poetry]
 package-mode = false
+
+[tool.poetry.dev-dependencies]
+uvicorn = ">=0.35.0,<0.36.0"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
