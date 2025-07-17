@@ -1,4 +1,3 @@
-
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -48,19 +47,32 @@ def list_products():
 @app.post("/products/search")
 def search_products(search_params: ProductSearch):
     """
-    Search and filter products based on criteria.
+    Search and filter products based on criteria (case-insensitive).
     """
     filtered_products = products
     if search_params.colors:
         filtered_products = [
-            p for p in filtered_products if any(c in p["colors"] for c in search_params.colors)
+            p for p in filtered_products
+            if any(
+                c.lower() in [color.lower() for color in p.get("colors", [])]
+                for c in search_params.colors
+            )
         ]
     if search_params.city:
-        filtered_products = [p for p in filtered_products if p["city"].lower() == search_params.city.lower()]
+        filtered_products = [
+            p for p in filtered_products
+            if p.get("city", "").lower() == search_params.city.lower()
+        ]
     if search_params.min_price:
-        filtered_products = [p for p in filtered_products if p["price"] >= search_params.min_price]
+        filtered_products = [
+            p for p in filtered_products
+            if p.get("price", 0) >= search_params.min_price
+        ]
     if search_params.max_price:
-        filtered_products = [p for p in filtered_products if p["price"] <= search_params.max_price]
+        filtered_products = [
+            p for p in filtered_products
+            if p.get("price", 0) <= search_params.max_price
+        ]
     return filtered_products
 
 class JsonRpcRequest(BaseModel):
