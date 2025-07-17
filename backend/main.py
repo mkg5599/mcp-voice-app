@@ -1,10 +1,15 @@
 
-import json
-from fastapi import FastAPI, Query
+from dotenv import load_dotenv
+load_dotenv()
+
+import os, tempfile, uuid, json
+from fastapi import FastAPI, Query, UploadFile, File
 from fastapi.responses import JSONResponse
 from typing import List, Any, Dict, Optional
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
+from openai import OpenAI
+
 
 app = FastAPI()
 
@@ -100,6 +105,35 @@ def mcp_endpoint(req: JsonRpcRequest):
             status_code=500,
         )
 
+
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+@app.post("/transcribe")
+async def transcribe(file: UploadFile = File(...)):
+    """
+    Accepts multipart/form-data audio file and returns Whisper text.
+    """
+    try:
+        suffix = os.path.splitext(file.filename or "")[-1] or ".webm"
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            tmp.write(await file.read())
+            tmp_path = tmp.name
+
+        transcript = client.audio.transcriptions.create(
+            model="whisper-1",
+            file=open(tmp_path, "rb"),
+            response_format="text",
+            language="en",
+        )
+        return {"text": transcript}
+    except Exception as exc:
+        return JSONResponse(status_code=500, content={"error": str(exc)})
+    finally:
+        try:
+            os.remove(tmp_path)
+        except Exception:
+            pass
+        
 @app.get("/.well-known/mcp.json")
 def get_mcp():
     """

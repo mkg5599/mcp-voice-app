@@ -43,6 +43,7 @@ export default function Home() {
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   const [searchText, setSearchText] = useState("");
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
 
@@ -78,62 +79,66 @@ export default function Home() {
   };
 
   const handleMicClick = () => {
-    console.log('Mic button clicked. Current recording state:', isRecording);
+    // Toggle behavior: first click starts, second click stops
     if (isRecording) {
-      if (mediaRecorderRef.current) {
-        mediaRecorderRef.current.stop();
-        console.log('MediaRecorder stopped.');
-      }
-      setIsRecording(false);
-    } else {
-      navigator.mediaDevices.getUserMedia({ audio: true })
-        .then(stream => {
-          const mediaRecorder = new MediaRecorder(stream);
-          mediaRecorderRef.current = mediaRecorder;
-          mediaRecorder.start();
-          console.log('MediaRecorder started.');
-
-          const audioChunks: Blob[] = [];
-          mediaRecorder.addEventListener("dataavailable", (event: BlobEvent) => {
-            audioChunks.push(event.data);
-            console.log('Audio data available:', event.data.size, 'bytes');
-          });
-
-          mediaRecorder.addEventListener("stop", () => {
-            console.log('MediaRecorder data collection stopped. Total chunks:', audioChunks.length);
-            const audioBlob = new Blob(audioChunks);
-            console.log('Audio Blob created:', audioBlob.size, 'bytes', audioBlob.type);
-            sendAudioToServer(audioBlob);
-          });
-
-          setIsRecording(true);
-        })
-        .catch(err => {
-          console.error('Error accessing microphone:', err);
-        });
+      mediaRecorderRef.current?.stop();
+      return; // onstop handler will finish up
     }
+
+    navigator.mediaDevices
+      .getUserMedia({ audio: true })
+      .then((stream) => {
+        const mr = new MediaRecorder(stream);
+        mediaRecorderRef.current = mr;
+        const chunks: Blob[] = [];
+
+        mr.ondataavailable = (e: BlobEvent) => {
+          if (e.data && e.data.size > 0) chunks.push(e.data);
+        };
+
+        mr.onstop = async () => {
+          setIsRecording(false);
+          const blob = new Blob(chunks, { type: "audio/webm" });
+          await sendAudioToServer(blob);
+        };
+
+        mr.start();
+        setIsRecording(true);
+      })
+      .catch((err) => {
+        console.error("Error accessing microphone:", err);
+      });
   };
 
   const sendAudioToServer = async (audioBlob: Blob) => {
-    console.log('Sending audio to transcribe API...');
+    setIsTranscribing(true);
+    setSearchText("…transcribing audio…");
+
     const formData = new FormData();
-    formData.append('file', audioBlob, 'recording.webm');
+    formData.append("file", audioBlob, "recording.webm");
 
     try {
-      const response = await fetch('/api/transcribe', {
-        method: 'POST',
+      const response = await fetch("/api/transcribe", {
+        method: "POST",
         body: formData,
       });
       const data = await response.json();
-      if (response.ok) {
-        console.log('Transcription API response:', data);
-        console.log('Transcription:', data.text);
-        handleSearch(data.text);
+      if (response.ok && data?.text) {
+        // Show transcript in input, then search
+        setSearchText(data.text);
+        await handleSearch(data.text);
       } else {
-        console.error('Transcription error:', data.error);
+        console.error("Transcription error:", data?.error || data);
+        setSearchText("");
       }
     } catch (error: unknown) {
-      console.error('Error sending audio to server:', error instanceof Error ? error.message : error);
+      console.error(
+        "Error sending audio to server:",
+        error instanceof Error ? error.message : error,
+      );
+      setSearchText("");
+    } finally {
+      setIsTranscribing(false);
     }
   };
 
@@ -147,6 +152,7 @@ export default function Home() {
           <div className="flex w-full max-w-md items-center gap-2">
             <input
               type="text"
+              disabled={isTranscribing}
               placeholder="Search products..."
               className="w-full rounded-l-md border border-gray-300 px-4 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
               value={searchText}
@@ -157,12 +163,16 @@ export default function Home() {
             />
             <button
               onClick={handleMicClick}
-              className={`rounded-r-md border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${isRecording
+              disabled={isTranscribing}
+              className={`rounded-r-md border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                isTranscribing
+                  ? "bg-yellow-400 text-white animate-pulse"
+                  : isRecording
                   ? "bg-red-500 text-white"
                   : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                }`}
+              }`}
             >
-              🎤
+              {isTranscribing ? "…" : "🎤"}
             </button>
           </div>
         </div>

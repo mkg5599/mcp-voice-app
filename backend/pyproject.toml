@@ -10,7 +10,9 @@ requires-python = ">=3.13"
 dependencies = [
     "fastapi (>=0.116.1,<0.117.0)",
     "uvicorn (>=0.35.0,<0.36.0)",
-    "python-multipart (>=0.0.20,<0.0.21)"
+    "python-multipart (>=0.0.20,<0.0.21)",
+    "openai (>=1.25.0)",
+    "python-dotenv (>=1.0.1)",
 ]
 
 [tool.poetry]
