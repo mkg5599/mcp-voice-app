@@ -11,7 +11,8 @@
       "src": "frontend/next.config.ts",
       "use": "@vercel/next",
       "config": {
-        "workPath": "frontend"
+        "workPath": "frontend",
+        "buildCommand": "NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL pnpm build"
       }
     }
   ],
