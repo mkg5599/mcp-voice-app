@@ -1,4 +1,3 @@
 {
-  "framework": "nextjs",
-  "buildCommand": "NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL pnpm build"
+  "framework": "nextjs"
 }
