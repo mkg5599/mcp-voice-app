@@ -2,3 +2,4 @@ fastapi>=0.116.1,<0.117.0
 python-multipart>=0.0.20,<0.0.21
 openai>=1.25.0
 python-dotenv>=1.0.1
+PyYAML>=6.0

@@ -1,7 +1,7 @@
 from dotenv import load_dotenv
 load_dotenv()
 
-import os, tempfile, uuid, json
+import os, tempfile, uuid, json, yaml
 from fastapi import FastAPI, Query, UploadFile, File
 from fastapi.responses import JSONResponse
 from typing import List, Any, Dict, Optional
@@ -12,6 +12,11 @@ from openai import OpenAI
 # Construct path to data file relative to this script
 backend_dir = os.path.dirname(os.path.abspath(__file__))
 products_json_path = os.path.join(backend_dir, "data", "products.json")
+prompts_yaml_path = os.path.join(backend_dir, "prompts.yml")
+
+# Load prompts and configuration
+with open(prompts_yaml_path, 'r') as f:
+    prompts_config = yaml.safe_load(f)
 
 app = FastAPI()
 
@@ -134,10 +139,8 @@ async def transcribe(file: UploadFile = File(...)):
             tmp_path = tmp.name
 
         transcript = client.audio.transcriptions.create(
-            model="whisper-1",
+            **prompts_config['transcribe'],
             file=open(tmp_path, "rb"),
-            response_format="text",
-            language="en",
         )
         return {"text": transcript}
     except Exception as exc:
@@ -153,39 +156,5 @@ def get_mcp():
     """
     MCP discovery file.
     """
-    return {
-        "name": "Product Catalog",
-        "description": "Search and filter products.",
-        "tools": [
-            {
-                "name": "list_products",
-                "description": "List all products.",
-                "path": "/products",
-                "method": "GET",
-                "parameters": {},
-            },
-            {
-                "name": "search_products",
-                "description": "Search and filter products based on criteria.",
-                "path": "/products/search",
-                "method": "POST",
-                "requestBody": {
-                    "colors": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "List of colors to filter by.",
-                    },
-                    "city": {"type": "string", "description": "City to filter by."},
-                    "min_price": {
-                        "type": "number",
-                        "description": "Minimum price to filter by.",
-                    },
-                    "max_price": {
-                        "type": "number",
-                        "description": "Maximum price to filter by.",
-                    },
-                },
-            },
-        ],
-    }
+    return prompts_config['mcp_discovery']
 

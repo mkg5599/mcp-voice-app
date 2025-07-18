@@ -1,0 +1,34 @@
+
+mcp_discovery:
+  name: "Product Catalog"
+  description: "Search and filter products."
+  tools:
+    - name: "list_products"
+      description: "List all products."
+      path: "/products"
+      method: "GET"
+      parameters: {}
+    - name: "search_products"
+      description: "Search and filter products based on criteria."
+      path: "/products/search"
+      method: "POST"
+      requestBody:
+        colors:
+          type: "array"
+          items:
+            type: "string"
+          description: "List of colors to filter by."
+        city:
+          type: "string"
+          description: "City to filter by."
+        min_price:
+          type: "number"
+          description: "Minimum price to filter by."
+        max_price:
+          type: "number"
+          description: "Maximum price to filter by."
+
+transcribe:
+  model: "whisper-1"
+  response_format: "text"
+  language: "en"
