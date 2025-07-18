@@ -1,13 +1,17 @@
-from dotenv import load_dotenv
-load_dotenv()
+import json
+import os
+import tempfile
+from typing import Any, Dict, List, Optional
 
-import os, tempfile, uuid, json, yaml
-from fastapi import FastAPI, Query, UploadFile, File
-from fastapi.responses import JSONResponse
-from typing import List, Any, Dict, Optional
-from pydantic import BaseModel
+import yaml
+from dotenv import load_dotenv
+from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from openai import OpenAI
+from pydantic import BaseModel
+
+load_dotenv()
 
 # Construct path to data file relative to this script
 backend_dir = os.path.dirname(os.path.abspath(__file__))

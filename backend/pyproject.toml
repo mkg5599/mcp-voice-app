@@ -18,8 +18,9 @@ dependencies = [
 [tool.poetry]
 package-mode = false
 
-[tool.poetry.dev-dependencies]
+[tool.poetry.group.dev.dependencies]
 uvicorn = ">=0.35.0,<0.36.0"
+ruff = ">=0.5.5,<0.6.0"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
