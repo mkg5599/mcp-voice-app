@@ -8,11 +8,11 @@ WORKDIR /app
 # Install poetry
 RUN pip install poetry
 
-# Copy the project files into the container
+# Copy only the dependency files to leverage Docker cache
 COPY pyproject.toml poetry.lock ./
 
 # Install project dependencies
-RUN poetry config virtualenvs.create false && poetry install --no-root
+RUN poetry install --no-root --no-virtualenv
 
 # Copy the rest of the application's code
 COPY . .
