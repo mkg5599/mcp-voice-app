@@ -8,7 +8,7 @@ import yaml
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from openai import OpenAI
 from pydantic import BaseModel
 
@@ -32,10 +32,51 @@ if not OPENAI_API_KEY:
 
 ALLOWED_ORIGINS = os.getenv(
     "ALLOWED_ORIGINS",
-    "http://localhost:3000,https://your-production-domain.example"
+    "http://localhost:3000,https://mcp-voice-app.manojkumargummadi.com/"
 ).split(",")
 
-app = FastAPI(title="Product Tool Server")
+app = FastAPI(
+    title="MCP Product Tool Server",
+    version="0.1.0",
+    description="FastAPI backend providing MCP-discoverable product catalog tools."
+)
+
+# ----- Root route -----
+@app.get("/", summary="Service Index", tags=["meta"])
+def index():
+    """
+    Index page describing the MCP backend.
+    """
+    return {
+        "message": "Welcome to the MCP Product Tool Server (FastAPI)",
+        "description": (
+            "This service exposes product catalog functions as MCP tools via JSON-RPC. "
+            "Clients (hosts) discover available tools at '/.well-known/mcp.json' and invoke them through '/mcp'. "
+            "Audio transcription is provided via OpenAI Whisper."
+        ),
+        "mcp": {
+            "discovery_endpoint": "/.well-known/mcp.json",
+            "json_rpc_endpoint": "/mcp",
+            "tools": [t.get("name") for t in PROMPTS_CONFIG["mcp_discovery"].get("tools", [])]
+        },
+        "rest_endpoints": {
+            "list_products": "/products",
+            "search_products": "/products/search",
+            "transcribe_audio": "/transcribe",
+            "health_check": "/healthz"
+        },
+        "versions": {
+            "api": app.version,
+            "openai": "whisper-1",
+            "gemini_hosted_from_frontend": True
+        },
+        "docs": {
+            "openapi_json": "/openapi.json",
+            "swagger_ui": "/docs",
+            "redoc": "/redoc"
+        }
+    }
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -100,7 +141,7 @@ def search_products_impl(params: ProductSearch) -> List[Dict[str, Any]]:
         results = [p for p in results if p.get("price", 0) <= params.max_price]
 
     return results
-
+    
 # ----- REST Endpoints for tools -----
 @app.get("/products")
 def list_products():
