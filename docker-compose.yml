@@ -1,24 +1,44 @@
-
 services:
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: mcp-voice-backend:latest
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
     ports:
       - "8000:8000"
-    volumes:
-      - ./backend:/app
+    networks:
+      - mcpnet
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      args:
-        - GEMINI_API_KEY=${GEMINI_API_KEY}
+    image: mcp-voice-frontend:latest
+    depends_on:
+      - backend
+    environment:
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      BACKEND_INTERNAL_URL: http://backend:8000
     ports:
       - "3000:3000"
-    volumes:
-      - /app/node_modules
-      - /app/.next
-    environment:
-      - NEXT_PUBLIC_API_URL=http://backend:8000
-      - NEXT_PUBLIC_MCP_URL=http://backend:8000/mcp   # <- add
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    networks:
+      - mcpnet
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+networks:
+  mcpnet:
+    driver: bridge

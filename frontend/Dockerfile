@@ -1,32 +1,47 @@
-# Use an official Node.js runtime as a parent image
-FROM node:20-alpine
-
-ARG GEMINI_API_KEY
-
-
-# Set the working directory in the container
+# ---------- Stage 1: deps ----------
+FROM node:20-alpine AS deps
 WORKDIR /app
 
-# Install pnpm
-RUN npm install -g pnpm
+RUN apk add --no-cache libc6-compat
 
-# Copy package.json and pnpm-lock.yaml for dependency installation
-COPY package.json pnpm-lock.yaml ./
+# Copy lockfiles (copy only what you actually use)
+COPY package.json package-lock.json* pnpm-lock.yaml* yarn.lock* ./
 
-# Install project dependencies
-RUN pnpm install
+# Use ONE package manager. Here: npm
+RUN npm ci
 
-# Clear Next.js build cache
+# ---------- Stage 2: build ----------
+FROM node:20-alpine AS builder
+WORKDIR /app
+ENV NEXT_TELEMETRY_DISABLED=1
 
-
-# Copy application files
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Build the Next.js application
-RUN NEXT_PUBLIC_API_URL=http://backend:8000 NEXT_PUBLIC_MCP_URL=http://backend:8000/mcp GEMINI_API_KEY=${GEMINI_API_KEY} pnpm build
+# Optional: if using standalone output, ensure next.config.js has:  output: 'standalone'
+RUN npm run build
 
-# Expose the port the app runs on
+# ---------- Stage 3: runtime ----------
+FROM node:20-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    PORT=3000
+
+# Create non-root user
+RUN addgroup -g 1001 -S nodegrp && adduser -S nodeuser -u 1001 -G nodegrp
+USER nodeuser
+
+# If using standalone, copy only necessary output
+# Otherwise copy .next + public + node_modules
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/node_modules ./node_modules
+
 EXPOSE 3000
 
-# Run the application
-CMD ["pnpm", "start"]
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD \
+    wget -q -O /dev/null http://localhost:3000/ || exit 1
+
+CMD ["node", "node_modules/next/dist/bin/next", "start", "-p", "3000"]

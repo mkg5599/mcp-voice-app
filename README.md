@@ -17,6 +17,40 @@ For detailed setup, installation, and running instructions, please refer to the 
 
 ## Architecture
 
+This application implements a Next.js Host + FastAPI MCP Tool Server + Voice (Whisper) + Gemini Function Calling architecture.
+
+**High-Level Architecture (Target State):**
+
+```
+Browser UI (page.tsx)
+  └─ POST /api/transcribe  (Node serverless)  -> OpenAI Whisper -> text
+       └─ POST /api/chat   (Node serverless Host)
+            1) Fetch & cache MCP discovery JSON
+            2) Gemini generateContent (ANY) with functionDeclarations
+            3) If functionCall -> JSON-RPC /mcp -> FastAPI tool
+            4) Second generateContent (NONE) with functionResponse
+            5) Return { message, products }
+FastAPI (Tool Server)
+  ├─ /.well-known/mcp.json
+  ├─ /mcp (JSON-RPC 2.0 façade)
+  ├─ /products , /products/search
+  └─ /healthz
+```
+
+## Environment Variables
+
+These environment variables are crucial for the application's functionality. They should be set securely in your deployment environment (e.g., Vercel project settings).
+
+| Name                  | Scope                               | Purpose                                      |
+| :-------------------- | :---------------------------------- | :------------------------------------------- |
+| `GEMINI_API_KEY`      | Server (Next.js + FastAPI)          | Gemini API access                            |
+| `OPENAI_API_KEY`      | Server (Next.js)                    | Whisper Speech-to-Text (STT)                 |
+| `BACKEND_INTERNAL_URL`| Server (Next.js)                    | Base URL of FastAPI tool server (e.g., `https://mcp-api.example.com`) |
+
+**Important:**
+*   `NEXT_PUBLIC_API_URL` is no longer used for internal host logic.
+*   The application will throw an explicit error if `BACKEND_INTERNAL_URL` is undefined on the server side.
+
 For a visual representation of the application's architecture, see the diagram in [SETUP.md](./SETUP.md#architecture-diagram).
 
 ## API Endpoints
