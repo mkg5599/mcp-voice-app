@@ -7,7 +7,11 @@ client = TestClient(app)
 def test_read_root():
     response = client.get("/")
     assert response.status_code == 200
-    assert response.json() == {"message": "Welcome to the FastAPI Backend!"}
+    data = response.json()
+    assert data["message"] == "Welcome to the MCP Product Tool Server (FastAPI)"
+    assert "mcp" in data
+    assert "rest_endpoints" in data
+    assert "docs"
 
 
 def test_list_products():
