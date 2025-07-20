@@ -1,15 +1,13 @@
 import json
 import os
-import tempfile
 import time
 from typing import Any, Dict, List, Optional
 
 import yaml
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, PlainTextResponse
-from openai import OpenAI
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 load_dotenv()
@@ -19,64 +17,57 @@ PRODUCTS_JSON_PATH = os.path.join(BACKEND_DIR, "data", "products.json")
 PROMPTS_YAML_PATH = os.path.join(BACKEND_DIR, "prompts.yml")
 
 # ----- Load config (single source) -----
-with open(PROMPTS_YAML_PATH, "r") as f:
+with open(PROMPTS_YAML_PATH, "r", encoding="utf-8") as f:
     PROMPTS_CONFIG = yaml.safe_load(f)
 
-# Optional: assert presence
 if "mcp_discovery" not in PROMPTS_CONFIG:
-    raise RuntimeError("prompts.yml missing 'mcp_discovery' section")
-
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-if not OPENAI_API_KEY:
-    raise RuntimeError("OPENAI_API_KEY not set")
+    raise RuntimeError("prompts.yml missing 'mcp_discovery' section (mcp_discovery: ...)")
 
 ALLOWED_ORIGINS = os.getenv(
     "ALLOWED_ORIGINS",
-    "http://localhost:3000,https://mcp-voice-app.manojkumargummadi.com/"
+    "http://localhost:3000"
 ).split(",")
 
 app = FastAPI(
     title="MCP Product Tool Server",
     version="0.1.0",
-    description="FastAPI backend providing MCP-discoverable product catalog tools."
+    description=(
+        "FastAPI backend exposing product catalog functions as MCP-discoverable tools. "
+        "Hosts (e.g. Next.js) discover tools at '/.well-known/mcp.json' and call them via JSON-RPC '/mcp'. "
+        "No transcription or LLM logic lives here—only domain/tool functionality."
+    ),
 )
 
 # ----- Root route -----
 @app.get("/", summary="Service Index", tags=["meta"])
 def index():
     """
-    Index page describing the MCP backend.
+    Describe the MCP tool server and its key endpoints.
     """
     return {
         "message": "Welcome to the MCP Product Tool Server (FastAPI)",
-        "description": (
-            "This service exposes product catalog functions as MCP tools via JSON-RPC. "
-            "Clients (hosts) discover available tools at '/.well-known/mcp.json' and invoke them through '/mcp'. "
-            "Audio transcription is provided via OpenAI Whisper."
-        ),
+        "purpose": "Expose product catalog functions as MCP tools (list_products, search_products).",
         "mcp": {
             "discovery_endpoint": "/.well-known/mcp.json",
             "json_rpc_endpoint": "/mcp",
-            "tools": [t.get("name") for t in PROMPTS_CONFIG["mcp_discovery"].get("tools", [])]
+            "tools": [t.get("name") for t in PROMPTS_CONFIG["mcp_discovery"].get("tools", [])],
         },
         "rest_endpoints": {
             "list_products": "/products",
             "search_products": "/products/search",
-            "transcribe_audio": "/transcribe",
-            "health_check": "/healthz"
+            "health_check": "/healthz",
         },
-        "versions": {
-            "api": app.version,
-            "openai": "whisper-1",
-            "gemini_hosted_from_frontend": True
-        },
+        "notes": [
+            "Transcription & LLM orchestration are handled by host(s) (e.g., Next.js).",
+            "This server is host-agnostic and reusable by multiple MCP hosts."
+        ],
         "docs": {
             "openapi_json": "/openapi.json",
             "swagger_ui": "/docs",
-            "redoc": "/redoc"
-        }
+            "redoc": "/redoc",
+        },
+        "version": app.version,
     }
-
 
 app.add_middleware(
     CORSMiddleware,
@@ -90,17 +81,19 @@ app.add_middleware(
 _products_cache: List[Dict[str, Any]] | None = None
 _products_mtime: float | None = None
 
+
 def load_products() -> List[Dict[str, Any]]:
     global _products_cache, _products_mtime
     try:
         stat = os.stat(PRODUCTS_JSON_PATH)
-    except FileNotFoundError:
-        raise RuntimeError("products.json not found")
+    except FileNotFoundError as e:
+        raise RuntimeError("products.json not found") from e
     if _products_cache is None or _products_mtime != stat.st_mtime:
-        with open(PRODUCTS_JSON_PATH) as f:
+        with open(PRODUCTS_JSON_PATH, "r", encoding="utf-8") as f:
             _products_cache = json.load(f)
         _products_mtime = stat.st_mtime
     return _products_cache  # type: ignore
+
 
 # ----- Models -----
 class ProductSearch(BaseModel):
@@ -109,20 +102,24 @@ class ProductSearch(BaseModel):
     min_price: Optional[float] = None
     max_price: Optional[float] = None
 
+
 class JsonRpcRequest(BaseModel):
     jsonrpc: str = "2.0"
     method: str
     params: Optional[Dict[str, Any]] = None
     id: int | str | None = None
 
-# ----- Tool functions -----
+
+# ----- Tool implementations -----
 def list_products_impl() -> List[Dict[str, Any]]:
     return load_products()
+
 
 def search_products_impl(params: ProductSearch) -> List[Dict[str, Any]]:
     products = load_products()
     results = products
 
+    # Colors (case-insensitive intersection)
     if params.colors:
         want = {c.lower() for c in params.colors if c}
         results = [
@@ -130,28 +127,34 @@ def search_products_impl(params: ProductSearch) -> List[Dict[str, Any]]:
             if want & {c.lower() for c in p.get("colors", [])}
         ]
 
+    # City (case-insensitive exact match)
     if params.city:
         city_l = params.city.lower()
         results = [p for p in results if p.get("city", "").lower() == city_l]
 
+    # Min price
     if params.min_price is not None:
         results = [p for p in results if p.get("price", 0) >= params.min_price]
 
+    # Max price
     if params.max_price is not None:
         results = [p for p in results if p.get("price", 0) <= params.max_price]
 
     return results
-    
-# ----- REST Endpoints for tools -----
+
+
+# ----- REST endpoints (direct use / debugging) -----
 @app.get("/products")
 def list_products():
     return list_products_impl()
+
 
 @app.post("/products/search")
 def search_products(search_params: ProductSearch):
     return search_products_impl(search_params)
 
-# ----- JSON-RPC (MCP tool façade) -----
+
+# ----- JSON-RPC (MCP façade) -----
 @app.post("/mcp")
 def mcp_endpoint(req: JsonRpcRequest):
     if req.jsonrpc != "2.0":
@@ -164,12 +167,12 @@ def mcp_endpoint(req: JsonRpcRequest):
             status_code=400,
         )
 
-    mapping = {
+    routing = {
         "list_products": lambda p: list_products_impl(),
         "search_products": lambda p: search_products_impl(ProductSearch(**(p or {}))),
     }
 
-    if req.method not in mapping:
+    if req.method not in routing:
         return JSONResponse(
             {
                 "jsonrpc": "2.0",
@@ -181,7 +184,7 @@ def mcp_endpoint(req: JsonRpcRequest):
 
     t0 = time.time()
     try:
-        result = mapping[req.method](req.params)
+        result = routing[req.method](req.params)
         duration_ms = int((time.time() - t0) * 1000)
         print(json.dumps({
             "evt": "json_rpc_request",
@@ -191,7 +194,7 @@ def mcp_endpoint(req: JsonRpcRequest):
             "duration_ms": duration_ms
         }))
         return {"jsonrpc": "2.0", "result": result, "id": req.id}
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         duration_ms = int((time.time() - t0) * 1000)
         print(json.dumps({
             "evt": "json_rpc_request_error",
@@ -209,70 +212,14 @@ def mcp_endpoint(req: JsonRpcRequest):
             status_code=500,
         )
 
-# ----- Whisper Transcription -----
-@app.post("/transcribe")
-async def transcribe(file: UploadFile = File(...)):
-    MAX_MB = 10
-    if file.size and file.size > MAX_MB * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="File too large")
-
-    allowed_ext = {".webm", ".mp3", ".wav", ".m4a", ".ogg"}
-    suffix = os.path.splitext(file.filename or "")[-1].lower()
-    if suffix and suffix not in allowed_ext:
-        raise HTTPException(status_code=400, detail="Unsupported audio format")
-
-    client = OpenAI(api_key=OPENAI_API_KEY)
-    tmp_path = None
-    t0 = time.time()
-    try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix or ".webm") as tmp:
-            content = await file.read()
-            tmp.write(content)
-            tmp_path = tmp.name
-
-        # Expand the YAML config explicitly (avoid hidden key surprises)
-        transcribe_cfg = PROMPTS_CONFIG.get("transcribe", {}) or {}
-        model = transcribe_cfg.get("model", "whisper-1")
-        response_format = transcribe_cfg.get("response_format", "text")
-        language = transcribe_cfg.get("language")
-
-        with open(tmp_path, "rb") as audio_f:
-            transcript = client.audio.transcriptions.create(
-                model=model,
-                file=audio_f,
-                response_format=response_format,
-                language=language,
-            )
-
-        text = transcript if isinstance(transcript, str) else getattr(transcript, "text", str(transcript))
-        print(json.dumps({
-            "evt": "transcribe",
-            "filename": file.filename,
-            "size_bytes": len(content),
-            "duration_ms": int((time.time() - t0) * 1000)
-        }))
-        return {"text": text}
-    except Exception as exc:
-        print(json.dumps({
-            "evt": "transcribe_error",
-            "error": str(exc),
-            "duration_ms": int((time.time() - t0) * 1000)
-        }))
-        return JSONResponse(status_code=500, content={"error": str(exc)})
-    finally:
-        if tmp_path:
-            try:
-                os.remove(tmp_path)
-            except OSError:
-                pass
 
 # ----- Health -----
 @app.get("/healthz")
 def healthz():
     return {"ok": True}
 
-# ----- Discovery -----
+
+# ----- MCP Discovery -----
 @app.get("/.well-known/mcp.json")
 def get_mcp():
-    # Could add cache headers
     return PROMPTS_CONFIG["mcp_discovery"]

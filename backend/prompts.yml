@@ -1,7 +1,7 @@
 
 mcp_discovery:
   name: "product-tools"
-  version: "2024-07-1"
+  version: "1.0"
   description: "Product catalog tools (list & filtered search)."
   tools:
     - name: "list_products"
@@ -16,8 +16,3 @@ mcp_discovery:
           city: { "type": "string" }
           min_price: { "type": "number" }
           max_price: { "type": "number" }
-
-transcribe:
-  model: "whisper-1"
-  response_format: "text"
-  language: "en"

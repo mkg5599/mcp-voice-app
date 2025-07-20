@@ -3,103 +3,121 @@ export const runtime = "nodejs";
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-
-if (!OPENAI_API_KEY) {
-  console.warn("[/api/transcribe] OPENAI_API_KEY missing at module load.");
-}
-
 const MAX_FILE_MB = 5;
 const MAX_BYTES = MAX_FILE_MB * 1024 * 1024;
-const ALLOWED_MIME_PREFIX = "audio/";
+const ACCEPT_MIME_PREFIXES = ["audio/", "video/webm"];
+const DEFAULT_MODEL = process.env.WHISPER_MODEL ?? "whisper-1";
+
+interface LogRecord {
+  evt: string;
+  [k: string]: unknown;
+}
+
+function log(rec: LogRecord) {
+  console.log(JSON.stringify(rec));
+}
+
+interface ErrorPayload {
+  error: string;
+  code: string;
+  detail?: string;
+  latency_ms: number;
+}
+
+function errorJSON(
+  status: number,
+  code: string,
+  message: string,
+  t0: number,
+  detail?: string,
+  extra?: Record<string, unknown>
+) {
+  const latency = Date.now() - t0;
+  const payload: ErrorPayload = { error: message, code, detail, latency_ms: latency };
+  log({ evt: "transcribe_error", code, message, detail, latency_ms: latency, ...extra });
+  return NextResponse.json(payload, { status });
+}
 
 export async function POST(req: Request) {
   const t0 = Date.now();
+  const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
   if (!OPENAI_API_KEY) {
-    return NextResponse.json(
-      {
-        error: "config_error",
-        detail: "OPENAI_API_KEY not configured on server",
-      },
-      { status: 500 },
-    );
+    return errorJSON(500, "CONFIG_ERROR", "OPENAI_API_KEY not configured on server", t0);
   }
 
   try {
     const formData = await req.formData();
-    const file = formData.get("file");
+    const uploaded = formData.get("file");
 
-    if (!file || !(file instanceof Blob)) {
-      return errorJSON("No file uploaded", 400, t0);
+    if (!uploaded || !(uploaded instanceof Blob)) {
+      return errorJSON(422, "NO_FILE", "No file uploaded", t0);
     }
 
-    if (file.size > MAX_BYTES) {
+    if (uploaded.size === 0) {
+      return errorJSON(400, "EMPTY_FILE", "Uploaded file is empty", t0);
+    }
+
+    if (uploaded.size > MAX_BYTES) {
       return errorJSON(
-        `File exceeds ${MAX_FILE_MB}MB (${(file.size / 1_048_576).toFixed(
-          2,
-        )}MB)`,
-        400,
-        t0,
+        413,
+        "FILE_TOO_LARGE",
+        `File exceeds ${MAX_FILE_MB}MB (received ${(uploaded.size / 1_048_576).toFixed(2)}MB)`,
+        t0
       );
     }
 
-    if (!file.type.startsWith(ALLOWED_MIME_PREFIX)) {
-      return errorJSON("Invalid file type (expect audio/*)", 400, t0);
+    const mime = uploaded.type || "application/octet-stream";
+    const mimeAllowed = ACCEPT_MIME_PREFIXES.some((p) => mime.startsWith(p));
+    if (!mimeAllowed) {
+      return errorJSON(415, "UNSUPPORTED_MEDIA_TYPE", `Unsupported media type: ${mime}`, t0);
     }
 
-    // Convert Blob → File for SDK
-    const audioFile = new File([file], file instanceof File ? file.name : "audio.webm", {
-      type: file.type,
-    });
+    const url = new URL(req.url);
+    const language = url.searchParams.get("lang") || undefined;
 
-    const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
+    const filename =
+      (uploaded as File).name ||
+      `audio.${mime.includes("webm") ? "webm" : (mime.split("/")[1] ?? "dat")}`;
+    const arrayBuffer = await uploaded.arrayBuffer();
+    const fileForOpenAI = new File([arrayBuffer], filename, { type: mime });
 
-    const transcript = await openai.audio.transcriptions.create({
-      model: "whisper-1",
-      file: audioFile,
+    const client = new OpenAI({ apiKey: OPENAI_API_KEY });
+
+    const resp = await client.audio.transcriptions.create({
+      model: DEFAULT_MODEL,
+      file: fileForOpenAI,
       response_format: "text",
+      language,
     });
-
-    type TranscriptResponse = string | { text: string };
-
-    const typedTranscript = transcript as TranscriptResponse;
 
     const text =
-      typeof typedTranscript === "string"
-        ? typedTranscript
-        : typedTranscript.text ?? typedTranscript;
+      typeof resp === "string"
+        ? resp
+        : (resp as { text?: string }).text ?? JSON.stringify(resp);
 
+    const latency = Date.now() - t0;
     log({
       evt: "transcribe_complete",
-      size_bytes: file.size,
-      latency_ms: Date.now() - t0,
+      filename,
+      size_bytes: uploaded.size,
+      mime,
+      model: DEFAULT_MODEL,
+      char_count: text.length,
+      language,
+      latency_ms: latency,
     });
 
-    return NextResponse.json({ text });
-  } catch (err: unknown) {
+    return NextResponse.json({
+      text,
+      filename,
+      bytes: uploaded.size,
+      model: DEFAULT_MODEL,
+      latency_ms: latency,
+      language,
+    });
+  } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    log({
-      evt: "transcribe_error",
-      error: msg,
-      latency_ms: Date.now() - t0,
-    });
-    return NextResponse.json(
-      { error: "transcription_failed", detail: msg },
-      { status: 500 },
-    );
+    return errorJSON(500, "TRANSCRIBE_FAIL", "Transcription failed", t0, msg);
   }
-}
-
-function errorJSON(message: string, status: number, t0: number) {
-  log({
-    evt: "transcribe_error",
-    error: message,
-    latency_ms: Date.now() - t0,
-  });
-  return NextResponse.json({ error: message }, { status });
-}
-
-function log(obj: Record<string, unknown>) {
-  console.log(JSON.stringify(obj));
 }
