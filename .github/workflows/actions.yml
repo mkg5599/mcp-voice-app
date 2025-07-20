@@ -49,6 +49,10 @@ jobs:
       working-directory: frontend
 
     - name: Frontend Type Check and Build
+      env:
+        BACKEND_INTERNAL_URL: "placeholder_backend_url"  # <-- add this secret in vercel
+        GEMINI_API_KEY: "placeholder_gemini_api_key"  # <-- add this secret in vercel
+        OPENAI_API_KEY: "placeholder_openai_api_key"  # <-- add this secret in vercel
       run: pnpm build
       working-directory: frontend
 
@@ -83,5 +87,6 @@ jobs:
 
     - name: Build Docker Images
       env:
-        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        GEMINI_API_KEY: 'placeholder_gemini_api_key'  # <-- add this secret in vercel
+        OPENAI_API_KEY: 'placeholder_openai_api_key'  # <-- add this secret in vercel
       run: docker-compose -f docker-compose.yml build

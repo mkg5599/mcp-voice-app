@@ -1,15 +1,16 @@
 # MCP Voice App
 
-An end‑to‑end **voice + natural language product search** application demonstrating:
+An end-to-end **voice + natural language product search** application demonstrating:
 
-* **Next.js (React + TypeScript)** as an *MCP Host*.
-* **FastAPI (Python)** as an *MCP Tool Server* exposing structured product functions.
-* **Google Gemini (@google/genai)** for *semantic interpretation + automatic function calling*.
-* **OpenAI Whisper** for *speech‑to‑text transcription*.
-* **JSON‑RPC 2.0 over HTTP** for tool invocation via `/mcp`.
-* **Docker Compose** for local multi‑service orchestration.
+* **Next.js (React + TypeScript)** acting as an *MCP Host* (LLM orchestration + Whisper transcription).
+* **FastAPI (Python)** as a **pure MCP Tool Server** exposing structured product functions only.
+* **Google Gemini (@google/genai)** for semantic interpretation + *automatic function calling*.
+* **OpenAI Whisper (via Next.js serverless route)** for speech-to-text transcription.
+* **JSON-RPC 2.0 over HTTP** (`/mcp`) for tool invocation.
+* **MCP-style discovery** via `/.well-known/mcp.json`.
+* **Docker Compose** for local multi-service orchestration.
 
-> The project showcases how the **Model Context Protocol (MCP)** can unify multiple front‑ends (hosts) and a shared tool server, while layering voice input and LLM function calling to operate on a simple product catalog.
+> This project shows how **Model Context Protocol principles** let you keep **domain tools** (product catalog functions) decoupled, while the **host** layers on voice input + LLM function calling. The backend now has **no transcription logic**—it is a reusable tool server.
 
 ---
 
@@ -38,90 +39,63 @@ An end‑to‑end **voice + natural language product search** application demons
 
 | Layer | Role | Technologies | Key Responsibility |
 |-------|------|--------------|--------------------|
-| **Host (UI)** | Accept user text / voice, orchestrate model calls | Next.js, TypeScript, @google/genai | Convert user intent into LLM prompts; negotiate automatic function calls; display results |
-| **LLM** | Natural language understanding + tool selection | Gemini 2.0 Flash (via `@google/genai`) | Parse queries, decide which MCP tool to call, integrate tool responses |
-| **Tool Server** | Domain functions (data plane) | FastAPI + MCP JSON-RPC | Provide deterministic functions (`list_products`, `search_products`) |
-| **Speech Layer** | Voice → Text | OpenAI Whisper | Transcribe audio before sending to Gemini |
-| **Discovery** | Tool metadata | `/.well-known/mcp.json` | Advertise tool schemas to hosts for dynamic functionDeclarations |
+| **Host (UI)** | Accept user text / voice; orchestrate LLM + tools | Next.js, TypeScript, @google/genai, Whisper | Transcribe audio → text; negotiate Gemini function calls; render results |
+| **LLM** | Natural language understanding + tool selection | Gemini 2.0 Flash | Decide whether to call a tool; summarize tool output |
+| **Tool Server** | Deterministic domain functions | FastAPI + JSON-RPC façade | Provide `list_products`, `search_products` |
+| **MCP Discovery** | Tool metadata | `/.well-known/mcp.json` | Advertise schemas for dynamic functionDeclarations |
+
+**Change vs earlier version:** The **backend no longer contains `/transcribe`**—speech belongs firmly to the host layer.
 
 ---
 
 ## Architecture
 
-**High-Level (Deployed):**
+**High-Level (Current):**
 
 ```
 Browser (React UI)
+   │ (MediaRecorder audio)
+   ├─ POST /api/transcribe  (Next.js serverless → Whisper)
    │
-   ├─ POST /api/transcribe ─> Next.js (Node) ─ Whisper ─> transcript text
-   │
-   └─ POST /api/chat ─> Next.js Host
-           1. Fetch & cache /.well-known/mcp.json (FastAPI)
-           2. Build functionDeclarations array
-           3. Gemini generateContent (mode=ANY)
-           4. If functionCall → POST /mcp (JSON-RPC)
-           5. Receive tool result → second generateContent (mode=NONE)
-           6. Return { message, products }
-FastAPI Tool Server
+   └─ POST /api/chat  (Gemini host logic)
+          1. Fetch & cache backend /.well-known/mcp.json
+          2. Build functionDeclarations
+          3. Gemini generateContent (mode=ANY)
+          4. If functionCall -> POST backend /mcp (JSON-RPC)
+          5. Wrap tool result as functionResponse
+          6. Gemini second call (mode=NONE)
+          7. Return { message, products? }
+Backend (FastAPI Tool Server)
    ├─ /products
    ├─ /products/search
-   ├─ /mcp (JSON-RPC 2.0 facade)
-   ├─ /.well-known/mcp.json (discovery)
+   ├─ /mcp
+   ├─ /.well-known/mcp.json
    └─ /healthz
 ```
 
-**Sequence (Voice Search Example):**
+**Why remove backend transcription?**
 
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant UI as Next.js UI
-    participant TR as /api/transcribe
-    participant WH as Whisper
-    participant CH as /api/chat
-    participant GM as Gemini
-    participant TP as /mcp (FastAPI)
-    U->>UI: Click Mic / Speak
-    UI->>TR: POST audio/webm
-    TR->>WH: Transcribe
-    WH-->>TR: text
-    TR-->>UI: { text }
-    UI->>CH: POST { text }
-    CH->>FastAPI: GET /.well-known/mcp.json (cached)
-    CH->>GM: generateContent (tools, mode=ANY)
-    GM-->>CH: functionCall(search_products,args)
-    CH->>TP: JSON-RPC {"method":"search_products",...}
-    TP-->>CH: {result: [...]}
-    CH->>GM: generateContent (functionResponse, mode=NONE)
-    GM-->>CH: natural language summary
-    CH-->>UI: { products, message }
-    UI-->>U: UI Update
-```
+* Keeps the **tool server reusable** by other agents without Whisper dependencies.
+* Reduces attack surface and secret sprawl—`OPENAI_API_KEY` exists only in host.
+* Clear separation of **pure data tools** vs **orchestration / AI enrichment**.
 
 ---
 
 ## Execution Flow
 
-1. **User Input (Text or Voice)**:  
-   - Voice: recorded in the browser → `/api/transcribe` → Whisper → text.
-   - Text: directly sent to `/api/chat`.
+1. **User Input (Voice or Text)**  
+   * Voice: Browser records → `/api/transcribe` → Whisper → text.  
+   * Text: Directly sent to `/api/chat`.
 
-2. **Tool Discovery**:  
-   `/api/chat` fetches `/.well-known/mcp.json` from the FastAPI server (cached in-memory) and converts each tool into a Gemini `functionDeclarations` entry.
+2. **Discovery**: Host fetches `/.well-known/mcp.json`, converts each tool to Gemini `functionDeclarations`.
 
-3. **First Gemini Call (Mode=ANY)**:  
-   Gemini may:  
-   * return a direct response **OR**  
-   * emit a `functionCall`.
+3. **First Gemini Call** (`mode=ANY`): Model may return answer or a `functionCall`.
 
-4. **Tool Invocation (JSON-RPC)**:  
-   The chosen function is invoked via POST `/mcp` with JSON-RPC 2.0 payload.
+4. **Tool Invocation**: Host calls backend `/mcp` JSON-RPC to execute domain function.
 
-5. **Second Gemini Call (Mode=NONE)**:  
-   The tool response is wrapped into a `functionResponse` and passed back so Gemini can compose a natural language explanation.
+5. **Second Gemini Call** (`mode=NONE`): Host includes `functionResponse` so Gemini composes a natural language summary.
 
-6. **Response Aggregation**:  
-   UI receives `{products?, message}` and renders product cards.
+6. **UI Update**: Host returns `{products?, message}` → React renders product cards + summary text.
 
 ---
 
@@ -129,44 +103,37 @@ sequenceDiagram
 
 | Component | Responsibility |
 |----------|----------------|
-| `/.well-known/mcp.json` | Discovery metadata (name, version, tool list + JSON schemas) |
-| `/mcp` | JSON-RPC façade mapping `method` → Python function |
-| Next.js `mcpHost.ts` | Fetches + caches discovery; converts to `ToolUnion[]`; validates arguments |
-| Gemini Config | `tools: [...]`, `functionCallingConfig.mode = ANY|NONE` |
-| Logs | Structured JSON for latency, tool name, product counts |
+| Backend `/.well-known/mcp.json` | Canonical tool schemas. |
+| Backend `/mcp` | JSON-RPC 2.0 payload dispatch. |
+| FastAPI functions | Implement deterministic business logic. |
+| Frontend `mcpHost.ts` | Fetch & cache discovery, generate tool declarations. |
+| Frontend `/api/chat` | Two-phase Gemini function-calling orchestration. |
 
-**Why this matches MCP:**  
-MCP’s goal is to standardize how *hosts* (LLM runtimes or orchestrators) discover and call *tools* (domain functions). Even though we are not yet using an official MCP SDK client here, we follow the *essence*:
-
-* Discovery endpoint returning machine-readable tool schemas.  
-* Explicit function invocation layer (JSON-RPC).  
-* Decoupled host → multiple potential hosts can now reuse the same tool server.
-
-To add another host (e.g. CLI agent, another web app, or a separate orchestrator), simply replicate the discovery + JSON-RPC steps.
+> Additional hosts (CLI, Slack bot, etc.) can reuse the backend by replicating: **discover → supply tools → call JSON-RPC**.
 
 ---
 
 ## Gemini Function Calling Flow
 
-| Phase | Input Provided | Mode | Output Expected |
-|-------|----------------|------|-----------------|
-| 1st call | Raw user text + functionDeclarations | `ANY` | Optionally `functionCalls[]` |
-| Tool call | JSON-RPC result | n/a | Raw data object / list |
-| 2nd call | Conversation History + `functionResponse` part | `NONE` | Final natural language message |
+| Phase | Input | Config Mode | Output |
+|-------|-------|-------------|--------|
+| 1 | User text + functionDeclarations | `ANY` | Optional `functionCalls[]` |
+| 2 | JSON-RPC tool result | — | — |
+| 3 | Conversation + `functionResponse` | `NONE` | Final natural language answer |
 
-We deliberately switch to `NONE` in the second call to prevent *infinite* tool recursion and to reduce latency.
+`mode=NONE` prevents recursive calls and reduces latency.
 
 ---
 
-## Whisper Speech Transcription
+## Whisper Speech Transcription (Host-Only)
 
 | Step | Detail |
 |------|--------|
-| Client Recording | Browser `MediaRecorder` → `Blob (audio/webm)` |
-| Upload | Multipart POST `/api/transcribe` |
-| Backend (Next.js) | Uses `openai.audio.transcriptions.create` (`model=whisper-1`) |
-| Response | Plain `{ text }` returned to UI |
-| Error Handling | File size/type validation + informative error JSON |
+| Recording | Browser `MediaRecorder` → `Blob` (`audio/webm`) |
+| Upload | POST `/api/transcribe` (Next.js) |
+| Transcription | `openai.audio.transcriptions.create` (`whisper-1`) |
+| Response | `{ text }` returned to UI |
+| Backend Impact | None (backend is tool-only) |
 
 ---
 
@@ -174,47 +141,59 @@ We deliberately switch to `NONE` in the second call to prevent *infinite* tool r
 
 ```
 root/
-├─ frontend/                 # Next.js app
-│  ├─ src/
-│  │  ├─ app/api/chat/route.ts          # Gemini host endpoint
-│  │  ├─ app/api/transcribe/route.ts    # Whisper transcription
-│  │  ├─ app/page.tsx                   # Product UI
-│  │  ├─ lib/mcpHost.ts                 # MCP discovery + invocation helper
-│  │  └─ components/...                 # UI components
-│  └─ Dockerfile
+├─ frontend/
+│  ├─ src/app/api/chat/route.ts        # Gemini orchestration (MCP Host)
+│  ├─ src/app/api/transcribe/route.ts  # Whisper transcription (host only)
+│  ├─ src/app/page.tsx                 # UI
+│  ├─ src/lib/mcpHost.ts               # Discovery + tool invocation helper
+│  └─ components/...
 ├─ backend/
-│  ├─ main.py                # FastAPI server (products + MCP + discovery)
+│  ├─ main.py            # FastAPI MCP tool server (products + discovery)
 │  ├─ data/products.json
-│  ├─ prompts.yml            # discovery + whisper config
+│  ├─ prompts.yml        # discovery schemas (transcribe section now unused)
 │  ├─ pyproject.toml
-│  └─ Dockerfile
 ├─ docker-compose.yml
-├─ README.md
-└─ SETUP.md                  # Step-by-step setup (see there)
+└─ README.md
 ```
 
 ---
 
 ## Environment Variables
 
-| Variable | Required At | Purpose |
-|----------|-------------|---------|
-| `GEMINI_API_KEY` | Next.js server | Gemini model access |
-| `OPENAI_API_KEY` | Next.js server | Whisper transcription |
-| `BACKEND_INTERNAL_URL` | Next.js server | Base URL for FastAPI (e.g. `https://mcp-api.example.com`) |
+| Variable | Needed In | Purpose |
+|----------|-----------|---------|
+| `GEMINI_API_KEY` | Frontend server runtime | Gemini model access |
+| `OPENAI_API_KEY` | Frontend server runtime | Whisper transcription |
+| `BACKEND_INTERNAL_URL` | Frontend server runtime | Base URL of FastAPI tool server |
 
-> **Do NOT** expose secrets with `NEXT_PUBLIC_` prefix.  
+> No transcription secrets reside in the backend now.
 
 ---
 
 ## Local Development
 
-### Prerequisites
-* Node.js ≥ 20  
-* Python ≥ 3.12 (project targets 3.13 in Docker)  
-* Docker + Docker Compose (optional but recommended)  
+### Backend
 
-### Run with Docker
+```bash
+cd backend
+poetry install
+uvicorn main:app --reload --port 8000
+```
+
+### Frontend
+
+```bash
+cd frontend
+npm install   # or pnpm install
+BACKEND_INTERNAL_URL=http://localhost:8000 \
+GEMINI_API_KEY=your_gemini_key \
+OPENAI_API_KEY=your_openai_key \
+npm run dev
+```
+
+Open: http://localhost:3000
+
+### Docker
 
 ```bash
 docker compose up --build
@@ -222,74 +201,52 @@ docker compose up --build
 # Backend:  http://localhost:8000
 ```
 
-### Run Without Docker
-
-_Backend:_
-```bash
-cd backend
-poetry install
-uvicorn main:app --reload --port 8000
-```
-
-_Frontend:_
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Ensure `BACKEND_INTERNAL_URL=http://localhost:8000` in frontend environment.
-
 ---
 
 ## Docker & Deployment
 
-| Layer | Deployment Notes |
-|-------|------------------|
-| Frontend (Next.js) | Build → Static + serverless functions (`/api/chat`, `/api/transcribe`) |
-| Backend (FastAPI) | Containerized; can run on Vercel (limited), Fly.io, Railway, Render, AWS Fargate |
-| Separation | Multiple hosts can point to the same FastAPI tool server |
-
-### Production Checklist
-- Rotate API keys regularly.
-- Enable HTTPS (Vercel handles certs).
-- Add request logging (already JSON).
-- Set CORS origins to actual domains (not `*`).
+| Service | Notes |
+|---------|-------|
+| Backend (FastAPI) | Stateless; horizontally scalable; can be reused by many hosts. |
+| Frontend (Next.js) | Deployed to Vercel; provides `/api/chat` + `/api/transcribe`. |
+| Separation | Clean host/tool divide; easier migration to additional hosts. |
 
 ---
 
 ## Extending the Catalog / Tools
 
-1. Add new Python function (e.g. `get_product_by_id`).
-2. Include it in `/mcp` mapping.
-3. Append schema entry in `prompts.yml` under `mcp_discovery.tools`.
-4. UI automatically discovers it (after cache invalidation restart) and Gemini may start calling it if prompted.
+1. Add Python function (e.g. `get_product_by_id`).
+2. Register in `/mcp` method mapping.
+3. Add schema entry to `prompts.yml` under `mcp_discovery.tools`.
+4. Redeploy backend.
+5. Host auto-discovers new tool; prompt Gemini to use it.
 
-**Tip:** Provide *clear, discriminative* descriptions so Gemini selects correct tools.
+**Tip:** Provide clear, discriminative descriptions so the model selects the correct tool.
 
 ---
 
 ## Security & Hardening
 
 | Concern | Mitigation |
-|---------|------------|
-| Secret leakage | Server-only env vars; never expose keys client-side |
-| Prompt injection via tool data | Validate / sanitize product inputs |
-| Unbounded audio size | Enforced max upload size check (extend if needed) |
-| DoS via large filters | Add server-side pagination & rate limiting |
-| Tool misuse | Consider whitelisting `allowedFunctionNames` |
+|---------|-----------|
+| Secret leakage | Server-only env vars; no `NEXT_PUBLIC_*` secrets. |
+| Overbroad CORS | Limit `ALLOWED_ORIGINS` in backend. |
+| Tool misuse | Use `allowedFunctionNames` in production if needed. |
+| Large responses | Add pagination to `search_products`. |
+| Rate abuse (transcribe) | Add simple rate limiting or auth token at host. |
+| Prompt injection via tool data | Sanitize product inputs before storing. |
 
 ---
 
 ## Troubleshooting
 
-| Symptom | Likely Cause | Fix |
-|---------|--------------|-----|
-| `OPENAI_API_KEY not configured` | Missing env in Next.js runtime | Set in deployment & redeploy |
-| `ContentUnion is required` | Incorrect `sendMessage` param shape (older code) | Use `models.generateContent` with proper `contents` |
-| No `functionCalls` | Model didn’t believe a tool is needed | Improve user prompt or tool descriptions |
-| Case-sensitive city filter | (Fixed) Ensure backend lowercases comparisons | Confirm deployed backend version |
-| CORS errors | Origin not whitelisted | Update `allow_origins` in FastAPI |
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| `BACKEND_INTERNAL_URL not defined` | Missing env during build/runtime | Add to deployment env & rebuild |
+| No `functionCalls` | Model didn't see need for tools | Strengthen tool descriptions / user prompt |
+| 500 in transcription | Missing or invalid `OPENAI_API_KEY` | Set correct key & redeploy |
+| Case-sensitive city filter | Old backend version | Redeploy updated backend |
+| CORS errors | Origin mismatch | Update backend `ALLOWED_ORIGINS` |
 
 ---
 
@@ -297,28 +254,27 @@ Ensure `BACKEND_INTERNAL_URL=http://localhost:8000` in frontend environment.
 
 | Area | Idea |
 |------|------|
-| Retrieval | Add vector search (e.g. Qdrant) for semantic product lookup |
-| Auth | Introduce JWT session to control tool access |
-| Caching | ETag / conditional requests for product list |
-| Observability | Add OpenTelemetry traces for each function call |
-| Streaming | Use `generateContentStream` for progressive UI updates |
-| Voice Output | Add TTS (Gemini or external) for spoken responses |
-| Multi-Host | Add CLI or Slack bot that reuses `/mcp` |
-| MLOps | Replace JSON with DB + embedding pipeline, nightly refresh job |
+| Retrieval | Add vector DB + semantic search tool. |
+| Streaming | Use `generateContentStream` for progressive answers. |
+| Observability | Integrate OpenTelemetry traces. |
+| Auth | JWT or API keys for tool calls. |
+| TTS | Add speech synthesis for responses. |
+| Multi-host | CLI or Slack bot reusing same backend. |
+| Pagination | Add `limit/offset` to tool responses. |
+| Analytics | Persist tool call metrics dashboards. |
 
 ---
 
 ## Contributing
 
-1. Fork repo
-2. Create feature branch: `git checkout -b feature/name`
-3. Add tool function + schema
-4. Run tests / lint:
+1. Fork & branch `feature/<name>`.
+2. Implement tool + schema.
+3. Lint & test:
    ```bash
    poetry run pytest
    npm run lint
    ```
-5. Submit PR with description & sample query.
+4. PR with example prompt + output.
 
 ---
 
@@ -328,5 +284,5 @@ MIT
 
 ---
 
-**Questions / Improvements?** Open an issue or start a discussion.  
-Happy hacking with MCP, Whisper & Gemini! 🚀
+**Questions / Ideas?** Open an issue.  
+Enjoy building with **MCP + Gemini + Whisper** 🚀
