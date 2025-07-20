@@ -1,0 +1,15 @@
+node_modules
+.next
+dist
+out
+coverage
+*.log
+Dockerfile
+docker-compose.yml
+.git
+.gitignore
+.vscode
+.env
+.env.*
+.pnpm-store
+.yarn
