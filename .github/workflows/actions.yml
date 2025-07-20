@@ -89,4 +89,5 @@ jobs:
       env:
         GEMINI_API_KEY: 'placeholder_gemini_api_key'  # <-- add this secret in vercel
         OPENAI_API_KEY: 'placeholder_openai_api_key'  # <-- add this secret in vercel
+        BACKEND_INTERNAL_URL: "placeholder_backend_url"  # <-- add this secret in vercel
       run: docker-compose -f docker-compose.yml build
