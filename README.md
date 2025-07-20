@@ -1,4 +1,4 @@
-# [MCP Voice App](https://mcp-voice-app.manojkumargummadi.com/)
+# [Agentic Product App - Based on Model Context Protocol](https://mcp-voice-app.manojkumargummadi.com/)
 
 An end-to-end **voice + natural language product search** application demonstrating:
 
