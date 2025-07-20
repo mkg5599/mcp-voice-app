@@ -1,4 +1,4 @@
-# MCP Voice App
+# [MCP Voice App](https://mcp-voice-app.manojkumargummadi.com/)
 
 An end-to-end **voice + natural language product search** application demonstrating:
 
@@ -10,7 +10,7 @@ An end-to-end **voice + natural language product search** application demonstrat
 * **MCP-style discovery** via `/.well-known/mcp.json`.
 * **Docker Compose** for local multi-service orchestration.
 
-> This project shows how **Model Context Protocol principles** let you keep **domain tools** (product catalog functions) decoupled, while the **host** layers on voice input + LLM function calling. The backend now has **no transcription logic**—it is a reusable tool server.
+> This project shows how **Model Context Protocol principles** let you keep **domain tools** (product catalog functions) decoupled, while the **host** layers on voice input + LLM function calling. The backend is a reusable tool server.
 
 ---
 
@@ -125,7 +125,7 @@ Backend (FastAPI Tool Server)
 
 ---
 
-## Whisper Speech Transcription (Host-Only)
+## Whisper Speech Transcription
 
 | Step | Detail |
 |------|--------|
