@@ -1,4 +1,10 @@
+ARG BACKEND_INTERNAL_URL=placeholder_backend_url
+ARG GEMINI_API_KEY=placeholder_gemini_api_key
+ARG OPENAI_API_KEY=placeholder_openai_api_key
 FROM node:20-alpine AS deps
+ENV BACKEND_INTERNAL_URL=${BACKEND_INTERNAL_URL} \
+    GEMINI_API_KEY=${GEMINI_API_KEY} \
+    OPENAI_API_KEY=${OPENAI_API_KEY}
 WORKDIR /app
 
 RUN apk add --no-cache libc6-compat
@@ -9,6 +15,9 @@ RUN npm ci
 
 FROM node:20-alpine AS builder
 WORKDIR /app
+ENV BACKEND_INTERNAL_URL=${BACKEND_INTERNAL_URL} \
+    GEMINI_API_KEY=${GEMINI_API_KEY} \
+    OPENAI_API_KEY=${OPENAI_API_KEY}
 ENV NEXT_TELEMETRY_DISABLED=1
 
 COPY . .
@@ -21,7 +30,10 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
-    PORT=3000
+    PORT=3000 \
+    BACKEND_INTERNAL_URL=${BACKEND_INTERNAL_URL} \
+    GEMINI_API_KEY=${GEMINI_API_KEY} \
+    OPENAI_API_KEY=${OPENAI_API_KEY}
 
 RUN addgroup -g 1001 -S nodegrp && adduser -S nodeuser -u 1001 -G nodegrp
 USER nodeuser

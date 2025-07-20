@@ -26,7 +26,7 @@ interface McpDiscovery {
 }
 
 /* ---------- Configuration ---------- */
-const BACKEND_INTERNAL_URL = process.env.BACKEND_INTERNAL_URL;
+const BACKEND_INTERNAL_URL = process.env.BACKEND_INTERNAL_URL ?? "http://localhost:8000";
 if (!BACKEND_INTERNAL_URL) {
   throw new Error(
     "BACKEND_INTERNAL_URL is not defined. Set this env var on the server."
