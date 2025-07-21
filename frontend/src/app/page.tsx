@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef } from "react";
 import { Product } from "../types/product";
 import SearchPromptModal from "../components/SearchPromptModal";
+import { Bot } from "lucide-react";
+import Link from "next/link";
 
 const formatPrice = (p: number) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
@@ -10,24 +12,24 @@ const formatPrice = (p: number) =>
   );
 
 const ProductCard = ({ product }: { product: Product }) => (
-  <div className="rounded-lg border p-4 shadow-sm transition hover:shadow-md">
-    <div className="mb-2 flex items-start justify-between">
+  <div className="bg-white rounded-lg border shadow-md p-6 hover:shadow-lg transition-shadow">
+    <div className="mb-3 flex items-start justify-between">
       <h3 className="text-lg font-bold text-gray-800">{product.name}</h3>
-      <span className="rounded-full bg-blue-100 px-2 py-1 text-sm font-semibold text-blue-600">
+      <span className="rounded-full bg-gradient-to-r from-blue-500 to-purple-500 px-3 py-1 text-sm font-semibold text-white">
         {formatPrice(product.price)}
       </span>
     </div>
-    <div className="space-y-1 text-sm text-gray-600">
+    <div className="space-y-2 text-sm text-gray-600">
       <p>
-        <span className="font-semibold">City:</span> {product.city}
+        <span className="font-semibold text-gray-700">City:</span> {product.city}
       </p>
       <div className="flex items-center">
-        <span className="mr-2 font-semibold">Colors:</span>
+        <span className="mr-2 font-semibold text-gray-700">Colors:</span>
         <div className="flex gap-2">
           {product.colors.map((c) => (
             <span
               key={c}
-              className="h-5 w-5 rounded-full border border-gray-300"
+              className="h-5 w-5 rounded-full border-2 border-gray-300 shadow-sm"
               style={{ backgroundColor: c }}
               title={c}
             />
@@ -167,32 +169,43 @@ export default function Home() {
   const canInteract = !isTranscribing;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="sticky top-0 z-10 bg-white shadow-sm">
-        <div className="container mx-auto flex items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
-          <h1 className="text-2xl font-bold text-gray-900">Product Catalog</h1>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
+      <header className="bg-white/95 backdrop-blur-md shadow-lg border-b border-indigo-100">
+        <div className="container mx-auto flex items-center justify-between px-6 py-4">
+          <div className="flex items-center gap-8">
+            <Link href="/" className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              Product Catalog
+            </Link>
+            <Link
+              href="/about"
+              className="text-lg font-semibold text-gray-700 hover:text-blue-600 transition-colors"
+            >
+              About
+            </Link>
+          </div>
 
-          <div className="flex w-full max-w-md items-center gap-2">
+          <div className="relative flex w-full max-w-lg items-center">
+            <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-blue-600">
+              <Bot size={20} className="inline" />
+            </span>
+
             <input
-              type="text"
+              className="pl-12 pr-16 w-full rounded-l-lg border-2 border-blue-200 bg-white/90 px-4 py-3 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 shadow-sm"
               disabled={!canInteract}
-              placeholder="Search products..."
-              className="w-full rounded-l-md border border-gray-300 px-4 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+              placeholder="Ask AI about products…"
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleSearch(searchText);
-              }}
+              onKeyDown={(e) => e.key === "Enter" && handleSearch(searchText)}
             />
+
             <button
               onClick={handleMicClick}
               disabled={!canInteract}
-              className={`rounded-r-md border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition ${isTranscribing
-                  ? "bg-yellow-400 text-white animate-pulse"
-                  : isRecording
-                    ? "bg-red-500 text-white"
-                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                } disabled:opacity-50`}
+              className={`absolute right-0 inset-y-0 flex items-center px-4 rounded-r-lg border-2 border-l-0 border-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 shadow-sm
+          ${isTranscribing ? "bg-yellow-500 text-white animate-pulse"
+                  : isRecording ? "bg-red-500 text-white shadow-md"
+                    : "bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600"}
+                  disabled:opacity-50`}
               title={isRecording ? "Stop recording" : "Start recording"}
             >
               {isTranscribing ? "…" : isRecording ? "■" : "🎤"}
@@ -201,17 +214,36 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8 sm:px-6 lg:px-8 space-y-6">
-        <div>
+      <section className="text-center py-12 px-6">
+        <h1 className="text-5xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-4">
+          Agentic Product Search
+        </h1>
+        <h2 className="text-2xl font-semibold text-gray-700 mb-3">Talk or type to explore our catalog</h2>
+        <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+          Powered by <span className="font-semibold text-blue-600">Gemini Flash</span> +
+          <span className="font-semibold text-green-600"> Whisper</span> ·
+          Tools exposed through the <span className="font-semibold text-purple-600">Model Context Protocol</span>
+        </p>
+      </section>
+
+      <main className="container mx-auto px-6 py-8 space-y-8">
+        <div className="flex justify-center">
           <SearchPromptModal onSelect={onPromptSelect} />
         </div>
 
         {modelMessage && !products.length && (
-          <p className="text-center text-sm text-gray-600">{modelMessage}</p>
+          <div className="bg-white/80 backdrop-blur-sm rounded-lg shadow-md p-6 text-center">
+            <p className="text-gray-700 text-lg">{modelMessage}</p>
+          </div>
         )}
 
         {isLoading ? (
-          <p className="text-center text-gray-500">Loading products...</p>
+          <div className="bg-white/80 backdrop-blur-sm rounded-lg shadow-md p-8 text-center">
+            <div className="inline-flex items-center gap-3">
+              <div className="w-6 h-6 border-3 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+              <p className="text-gray-700 text-lg">Loading products...</p>
+            </div>
+          </div>
         ) : products.length ? (
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
             {products.map((p) => (
@@ -220,7 +252,9 @@ export default function Home() {
           </div>
         ) : (
           !modelMessage && (
-            <p className="text-center text-gray-500">No products found.</p>
+            <div className="bg-white/80 backdrop-blur-sm rounded-lg shadow-md p-8 text-center">
+              <p className="text-gray-600 text-lg">No products found.</p>
+            </div>
           )
         )}
       </main>
