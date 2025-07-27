@@ -20,7 +20,7 @@ mypy==1.17.0
 mypy_extensions==1.1.0
 numpy==1.26.4
 openai==1.97.0
-packaging==25.0
+packaging==24.2
 pathspec==0.12.1
 pluggy==1.6.0
 pydantic==2.11.7
@@ -36,7 +36,6 @@ starlette==0.47.1
 tenacity==8.2.3
 tiktoken==0.7.0
 tqdm==4.67.1
-types-PyYAML==6.0.12.20250516
 typing-inspection==0.4.1
-typing_extensions==4.14.1
+typing_extensions==4.14.0
 uvicorn==0.35.0
