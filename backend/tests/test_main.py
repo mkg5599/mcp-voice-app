@@ -3,7 +3,6 @@ from main import app
 
 client = TestClient(app)
 
-
 def test_read_root():
     response = client.get("/")
     assert response.status_code == 200
@@ -11,14 +10,12 @@ def test_read_root():
     assert data["message"] == "Welcome to the MCP Product Tool Server (FastAPI)"
     assert "mcp" in data
     assert "rest_endpoints" in data
-    assert "docs"
-
+    assert "docs" in data
 
 def test_list_products():
     response = client.get("/products")
     assert response.status_code == 200
     assert isinstance(response.json(), list)
-
 
 def test_search_products():
     # Test with no parameters
@@ -49,7 +46,6 @@ def test_search_products():
     assert len(products) > 0
     assert all(10 <= p.get("price", 0) <= 50 for p in products)
 
-
 def test_mcp_endpoint():
     # Test list_products
     response = client.post("/mcp", json={"jsonrpc": "2.0", "method": "list_products", "id": 1})
@@ -63,14 +59,31 @@ def test_mcp_endpoint():
     assert len(products) > 0
     assert all(p.get("city", "").lower() == "portland" for p in products)
 
+    # Test semantic_product_search
+    response = client.post("/mcp", json={"jsonrpc": "2.0", "method": "semantic_product_search", "params": {"query": "comfortable hoodie"}, "id": 3})
+    assert response.status_code == 200
+    products = response.json()["result"]
+    assert isinstance(products, list)
+
     # Test method not found
-    response = client.post("/mcp", json={"jsonrpc": "2.0", "method": "non_existent_method", "id": 3})
+    response = client.post("/mcp", json={"jsonrpc": "2.0", "method": "non_existent_method", "id": 4})
     assert response.status_code == 404
     assert response.json()["error"]["code"] == -32601
-
 
 def test_get_mcp():
     response = client.get("/.well-known/mcp.json")
     assert response.status_code == 200
-    assert "name" in response.json()
-    assert "tools" in response.json()
+    discovery = response.json()
+    assert "name" in discovery
+    assert "tools" in discovery
+    tool_names = [tool["name"] for tool in discovery["tools"]]
+    assert "list_products" in tool_names
+    assert "search_products" in tool_names
+    assert "semantic_product_search" in tool_names
+
+def test_healthz():
+    response = client.get("/healthz")
+    assert response.status_code == 200
+    data = response.json()
+    assert "ok" in data
+    assert "vector_store_ready" in data

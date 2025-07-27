@@ -19,13 +19,14 @@ import {
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 if (!GEMINI_API_KEY) {
   console.error("[/api/chat] Missing GEMINI_API_KEY env var");
-  // (Don’t throw here because Next might import during build; we check again in handler.)
+  // (Don't throw here because Next might import during build; we check again in handler.)
 }
 
 const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY ?? "" });
 
 // ---- Constants ----
 const MAX_INPUT_CHARS = 2000;
+const MODEL_NAME = "gemini-2.0-flash-001"; // Use consistent model
 
 export async function POST(req: Request) {
   const t0 = Date.now();
@@ -76,7 +77,7 @@ export async function POST(req: Request) {
 
     // ---- First model call (allow function calling) ----
     const first = await ai.models.generateContent({
-      model: "gemini-2.0-flash-001",
+      model: MODEL_NAME,
       contents: text,
       config: {
         tools,
@@ -148,7 +149,7 @@ export async function POST(req: Request) {
     ];
 
     const second = await ai.models.generateContent({
-      model: "gemini-2.0-flash-001",
+      model: MODEL_NAME, // Use same model for consistency
       contents: conversation,
       config: {
         toolConfig: {

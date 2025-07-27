@@ -1,4 +1,3 @@
-
 mcp_discovery:
   name: "product-tools"
   version: "1.0"
@@ -16,3 +15,10 @@ mcp_discovery:
           city: { "type": "string" }
           min_price: { "type": "number" }
           max_price: { "type": "number" }
+    - name: "semantic_product_search"
+      description: "Semantic search for products using natural language queries."
+      input_schema:
+        type: "object"
+        properties:
+          query: { "type": "string" }
+          top_k: { "type": "number" }

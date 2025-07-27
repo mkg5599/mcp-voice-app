@@ -6,7 +6,7 @@ WORKDIR /app
 
 RUN apk add --no-cache libc6-compat
 
-COPY package.json package-lock.json ./
+COPY package.json package-lock.json* ./
 
 RUN npm ci
 
@@ -14,8 +14,16 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 
-COPY . .
+# Build-time environment variables for Next.js
+ARG BACKEND_INTERNAL_URL=http://backend:8000
+ARG GEMINI_API_KEY
+ARG OPENAI_API_KEY
 
+ENV BACKEND_INTERNAL_URL=$BACKEND_INTERNAL_URL
+ENV GEMINI_API_KEY=$GEMINI_API_KEY
+ENV OPENAI_API_KEY=$OPENAI_API_KEY
+
+COPY . .
 COPY --from=deps /app/node_modules ./node_modules
 
 RUN npm run build
@@ -26,13 +34,19 @@ ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     PORT=3000
 
-RUN addgroup -g 1001 -S nodegrp && adduser -S nodeuser -u 1001 -G nodegrp
-USER nodeuser
+# Runtime environment variables
+ENV BACKEND_INTERNAL_URL=http://backend:8000
+ENV GEMINI_API_KEY=""
+ENV OPENAI_API_KEY=""
 
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/node_modules ./node_modules
+RUN addgroup -g 1001 -S nodegrp && adduser -S nodeuser -u 1001 -G nodegrp
+
+COPY --from=builder --chown=nodeuser:nodegrp /app/public ./public
+COPY --from=builder --chown=nodeuser:nodegrp /app/.next ./.next
+COPY --from=builder --chown=nodeuser:nodegrp /app/package.json ./package.json
+COPY --from=builder --chown=nodeuser:nodegrp /app/node_modules ./node_modules
+
+USER nodeuser
 
 EXPOSE 3000
 

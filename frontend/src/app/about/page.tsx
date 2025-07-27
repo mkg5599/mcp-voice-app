@@ -23,14 +23,13 @@ export default function AboutPage() {
                     <p className="text-2xl text-gray-700 mb-4">
                         Voice + Natural Language Product Search
                     </p>
-                    <p className="text-lg text-gray-600 max-w-3xl mx-auto">
+                    <p className="text-lg text-gray-600 max-w-4xl mx-auto">
                         Powered by{" "}
                         <span className="font-semibold text-blue-600">Gemini 2.0 Flash</span>,{" "}
                         <span className="font-semibold text-green-600">OpenAI Whisper</span>,{" "}
-                        <span className="font-semibold text-purple-600">FastAPI</span>, and{" "}
-                        <span className="font-semibold text-orange-600">
-                            Model Context Protocol
-                        </span>
+                        <span className="font-semibold text-purple-600">FastAPI + ChromaDB</span>,{" "}
+                        <span className="font-semibold text-orange-600">Model Context Protocol</span>, and{" "}
+                        <span className="font-semibold text-red-600">LangChain Vector Search</span>
                     </p>
                 </header>
 
@@ -57,9 +56,9 @@ export default function AboutPage() {
                                 <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mb-3">
                                     <span className="text-white font-bold text-lg">2</span>
                                 </div>
-                                <h3 className="font-semibold text-green-700">Next.js Frontend</h3>
+                                <h3 className="font-semibold text-green-700">Next.js Host</h3>
                                 <p className="text-sm text-gray-600 text-center">
-                                    Transcription & LLM Orchestration
+                                    Whisper Transcription + MCP Host
                                 </p>
                             </div>
 
@@ -69,9 +68,9 @@ export default function AboutPage() {
                                 <div className="w-16 h-16 bg-purple-500 rounded-full flex items-center justify-center mb-3">
                                     <span className="text-white font-bold text-lg">3</span>
                                 </div>
-                                <h3 className="font-semibold text-purple-700">Gemini 2.0</h3>
+                                <h3 className="font-semibold text-purple-700">Gemini 2.0 Flash</h3>
                                 <p className="text-sm text-gray-600 text-center">
-                                    Function Calling & Interpretation
+                                    Function Calling + Tool Selection
                                 </p>
                             </div>
 
@@ -82,7 +81,7 @@ export default function AboutPage() {
                                     <span className="text-white font-bold text-lg">4</span>
                                 </div>
                                 <h3 className="font-semibold text-orange-700">FastAPI Backend</h3>
-                                <p className="text-sm text-gray-600 text-center">MCP Tool Server</p>
+                                <p className="text-sm text-gray-600 text-center">MCP Tool Server + Vector Search</p>
                             </div>
                         </div>
                     </div>
@@ -96,57 +95,99 @@ export default function AboutPage() {
                     <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                         <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
                             <h3 className="text-xl font-semibold text-blue-600 mb-3">
-                                Voice & Text Input
+                                🎤 Voice & Text Input
                             </h3>
                             <p className="text-gray-600">
                                 Search for products using either spoken commands or typed text
-                                with Whisper transcription.
+                                with OpenAI Whisper transcription.
                             </p>
                         </div>
                         <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
                             <h3 className="text-xl font-semibold text-green-600 mb-3">
-                                Gemini Integration
+                                🤖 Gemini 2.0 Integration
                             </h3>
                             <p className="text-gray-600">
-                                Leverages Gemini 2.0 Flash for intelligent product filtering
-                                based on natural language queries.
+                                Uses Gemini 2.0 Flash model for intelligent function calling
+                                and natural language understanding.
                             </p>
                         </div>
                         <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
                             <h3 className="text-xl font-semibold text-purple-600 mb-3">
-                                MCP Protocol
+                                🔍 Semantic Vector Search
                             </h3>
                             <p className="text-gray-600">
-                                Model Context Protocol enables robust backend integration with
-                                automatic tool discovery.
+                                AI-powered vector search using OpenAI embeddings and ChromaDB for natural language
+                                product discovery with similarity scoring.
                             </p>
                         </div>
                         <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
                             <h3 className="text-xl font-semibold text-orange-600 mb-3">
-                                Function Calling
+                                📡 Model Context Protocol
                             </h3>
                             <p className="text-gray-600">
-                                Gemini automatically calls backend functions via JSON-RPC 2.0 over
-                                HTTP.
+                                JSON-RPC 2.0 over HTTP with automatic tool discovery via 
+                                /.well-known/mcp.json endpoint for robust backend integration.
                             </p>
                         </div>
                         <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
                             <h3 className="text-xl font-semibold text-red-600 mb-3">
-                                Responsive UI
+                                🧠 Smart Tool Selection
                             </h3>
                             <p className="text-gray-600">
-                                Clean, modern interface with real-time product search results and
-                                filtering.
+                                Gemini automatically chooses between structured filtering, semantic search,
+                                or product listing based on your query intent.
                             </p>
                         </div>
                         <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
                             <h3 className="text-xl font-semibold text-indigo-600 mb-3">
-                                Docker Ready
+                                🐳 Production Ready
                             </h3>
                             <p className="text-gray-600">
-                                Easily deployable using Docker Compose for local development and
-                                production.
+                                Docker Compose orchestration with persistent vector storage,
+                                CORS handling, and comprehensive error management.
                             </p>
+                        </div>
+                    </div>
+                </section>
+
+                {/* MCP Tools */}
+                <section className="mb-16">
+                    <h2 className="text-3xl font-bold text-center text-gray-800 mb-8">
+                        Available MCP Tools
+                    </h2>
+                    <div className="grid md:grid-cols-3 gap-6">
+                        <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-blue-500">
+                            <h3 className="text-xl font-semibold text-blue-600 mb-3">
+                                📦 list_products
+                            </h3>
+                            <p className="text-gray-600 mb-3">
+                                Returns all products in the catalog with complete metadata.
+                            </p>
+                            <div className="text-sm text-gray-500">
+                                <strong>Triggers:</strong> &quot;show all products&quot;, &quot;what&apos;s available&quot;
+                            </div>
+                        </div>
+                        <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-green-500">
+                            <h3 className="text-xl font-semibold text-green-600 mb-3">
+                                🔍 search_products
+                            </h3>
+                            <p className="text-gray-600 mb-3">
+                                Filters products by specific attributes: colors, city, price range.
+                            </p>
+                            <div className="text-sm text-gray-500">
+                                <strong>Triggers:</strong> &quot;red items under $50&quot;, &quot;products in Portland&quot;
+                            </div>
+                        </div>
+                        <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-purple-500">
+                            <h3 className="text-xl font-semibold text-purple-600 mb-3">
+                                🤖 semantic_product_search
+                            </h3>
+                            <p className="text-gray-600 mb-3">
+                                Vector similarity search for natural language queries with scoring.
+                            </p>
+                            <div className="text-sm text-gray-500">
+                                <strong>Triggers:</strong> &quot;comfortable hoodies&quot;, &quot;warm winter clothing&quot;
+                            </div>
                         </div>
                     </div>
                 </section>
@@ -159,50 +200,81 @@ export default function AboutPage() {
                     <div className="grid md:grid-cols-2 gap-8">
                         <div className="bg-white rounded-lg shadow-md p-6">
                             <h3 className="text-xl font-semibold text-blue-600 mb-4">
-                                Backend (FastAPI)
+                                🐍 Backend (FastAPI Tool Server)
                             </h3>
-                            <ul className="space-y-2">
-                                <li>
-                                    <Link
-                                        href={`${process.env.BACKEND_INTERNAL_URL}/.well-known/mcp.json`}
-                                        className="text-blue-600 hover:underline"
+                            <ul className="space-y-3">
+                                <li className="flex items-center gap-2">
+                                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded font-mono">GET</span>
+                                    <a 
+                                        href={`http://localhost:8000/.well-known/mcp.json`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-blue-600 hover:underline text-sm"
                                     >
-                                        📋 MCP Discovery: /.well-known/mcp.json
-                                    </Link>
+                                        /.well-known/mcp.json
+                                    </a>
                                 </li>
-                                <li>
-                                    <Link
-                                        href={`${process.env.BACKEND_INTERNAL_URL}/products`}
-                                        className="text-blue-600 hover:underline"
+                                <li className="flex items-center gap-2">
+                                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded font-mono">GET</span>
+                                    <a 
+                                        href={`http://localhost:8000/products`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-blue-600 hover:underline text-sm"
                                     >
-                                        📦 List Products: /products
-                                    </Link>
+                                        /products
+                                    </a>
                                 </li>
-                                <li>
-                                    <Link
-                                        href={`${process.env.BACKEND_INTERNAL_URL}/docs`}
-                                        className="text-blue-600 hover:underline"
+                                <li className="flex items-center gap-2">
+                                    <span className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded font-mono">POST</span>
+                                    <span className="text-orange-600 text-sm">/products/search</span>
+                                </li>
+                                <li className="flex items-center gap-2">
+                                    <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded font-mono">POST</span>
+                                    <span className="text-purple-600 text-sm">/products/semantic-search</span>
+                                </li>
+                                <li className="flex items-center gap-2">
+                                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded font-mono">GET</span>
+                                    <a 
+                                        href={`http://localhost:8000/docs`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-blue-600 hover:underline text-sm"
                                     >
-                                        📚 Swagger UI: /docs
-                                    </Link>
+                                        /docs (Swagger UI)
+                                    </a>
+                                </li>
+                                <li className="flex items-center gap-2">
+                                    <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded font-mono">GET</span>
+                                    <a 
+                                        href={`http://localhost:8000/healthz`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-green-600 hover:underline text-sm"
+                                    >
+                                        /healthz
+                                    </a>
                                 </li>
                             </ul>
                         </div>
                         <div className="bg-white rounded-lg shadow-md p-6">
                             <h3 className="text-xl font-semibold text-green-600 mb-4">
-                                Frontend (Next.js)
+                                ⚛️ Frontend (Next.js MCP Host)
                             </h3>
-                            <ul className="space-y-2">
-                                <li className="text-green-600">
-                                    🤖 Gemini Orchestration: /api/chat
+                            <ul className="space-y-3">
+                                <li className="flex items-center gap-2">
+                                    <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded font-mono">POST</span>
+                                    <span className="text-green-600 text-sm">/api/chat (Gemini Orchestration)</span>
                                 </li>
-                                <li className="text-green-600">
-                                    🎤 Whisper Transcription: /api/transcribe
+                                <li className="flex items-center gap-2">
+                                    <span className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded font-mono">POST</span>
+                                    <span className="text-orange-600 text-sm">/api/transcribe (Whisper)</span>
                                 </li>
                             </ul>
-                            <p className="text-sm text-gray-500 mt-4">
-                                Frontend API routes are internal server endpoints
-                            </p>
+                            <div className="mt-4 p-3 bg-gray-50 rounded text-sm text-gray-600">
+                                <strong>Note:</strong> Frontend API routes are internal serverless functions
+                                that handle LLM orchestration and speech transcription.
+                            </div>
                         </div>
                     </div>
                 </section>
@@ -213,15 +285,16 @@ export default function AboutPage() {
                         How It Works
                     </h2>
                     <div className="bg-white rounded-lg shadow-md p-8">
-                        <ol className="space-y-4">
+                        <ol className="space-y-6">
                             <li className="flex items-start">
                                 <span className="flex-shrink-0 w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center font-bold mr-4">
                                     1
                                 </span>
                                 <div>
-                                    <h4 className="font-semibold text-gray-800">User Input</h4>
+                                    <h4 className="font-semibold text-gray-800 mb-1">User Input</h4>
                                     <p className="text-gray-600">
-                                        User speaks or types a product search query
+                                        User speaks or types a product search query. Voice input is transcribed
+                                        using OpenAI Whisper via <code className="bg-gray-100 px-1 rounded">/api/transcribe</code>.
                                     </p>
                                 </div>
                             </li>
@@ -230,12 +303,11 @@ export default function AboutPage() {
                                     2
                                 </span>
                                 <div>
-                                    <h4 className="font-semibold text-gray-800">
-                                        Transcription & Processing
-                                    </h4>
+                                    <h4 className="font-semibold text-gray-800 mb-1">MCP Discovery</h4>
                                     <p className="text-gray-600">
-                                        Frontend transcribes voice (if needed) and sends to Gemini via{" "}
-                                        <code>/api/chat</code>
+                                        Frontend fetches available tools from backend&#39;s{" "}
+                                        <code className="bg-gray-100 px-1 rounded">/.well-known/mcp.json</code>{" "}
+                                        and converts them to Gemini function declarations.
                                     </p>
                                 </div>
                             </li>
@@ -244,10 +316,11 @@ export default function AboutPage() {
                                     3
                                 </span>
                                 <div>
-                                    <h4 className="font-semibold text-gray-800">Function Calling</h4>
+                                    <h4 className="font-semibold text-gray-800 mb-1">Gemini Function Calling</h4>
                                     <p className="text-gray-600">
-                                        Gemini interprets query and calls backend tools via MCP (
-                                        <code>/mcp</code>)
+                                        Gemini 2.0 Flash analyzes query intent and automatically selects the best tool:
+                                        structured filtering, semantic search, or product listing via{" "}
+                                        <code className="bg-gray-100 px-1 rounded">/api/chat</code>.
                                     </p>
                                 </div>
                             </li>
@@ -256,9 +329,12 @@ export default function AboutPage() {
                                     4
                                 </span>
                                 <div>
-                                    <h4 className="font-semibold text-gray-800">Backend Processing</h4>
+                                    <h4 className="font-semibold text-gray-800 mb-1">Backend Tool Execution</h4>
                                     <p className="text-gray-600">
-                                        Backend executes product search functions and returns results
+                                        Backend receives JSON-RPC 2.0 request at{" "}
+                                        <code className="bg-gray-100 px-1 rounded">/mcp</code> and executes
+                                        the chosen function: attribute filtering, ChromaDB vector search,
+                                        or simple listing.
                                     </p>
                                 </div>
                             </li>
@@ -267,9 +343,11 @@ export default function AboutPage() {
                                     5
                                 </span>
                                 <div>
-                                    <h4 className="font-semibold text-gray-800">Result Display</h4>
+                                    <h4 className="font-semibold text-gray-800 mb-1">Result Synthesis</h4>
                                     <p className="text-gray-600">
-                                        Gemini summarizes results and frontend displays them to the user
+                                        Frontend sends tool results back to Gemini for natural language
+                                        summarization, then displays products with similarity scores,
+                                        tool indicators, and rich metadata.
                                     </p>
                                 </div>
                             </li>
@@ -282,37 +360,197 @@ export default function AboutPage() {
                     <h2 className="text-3xl font-bold text-center text-gray-800 mb-8">
                         Technology Stack
                     </h2>
-                    <div className="grid md:grid-cols-4 gap-6">
-                        <div className="text-center">
-                            <div className="w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center mx-auto mb-3">
-                                <span className="text-white font-bold">⚛️</span>
+                    
+                    {/* Frontend Stack */}
+                    <div className="mb-8">
+                        <h3 className="text-xl font-semibold text-blue-600 mb-4 text-center">
+                            Frontend (MCP Host)
+                        </h3>
+                        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div className="bg-white rounded-lg shadow-md p-4 text-center">
+                                <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center mx-auto mb-2">
+                                    <span className="text-white font-bold">⚛️</span>
+                                </div>
+                                <h4 className="font-semibold text-blue-600">Next.js 14</h4>
+                                <p className="text-xs text-gray-600">React Framework + API Routes</p>
                             </div>
-                            <h3 className="font-semibold text-blue-600">Next.js</h3>
-                            <p className="text-sm text-gray-600">React + TypeScript</p>
+                            <div className="bg-white rounded-lg shadow-md p-4 text-center">
+                                <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-2">
+                                    <span className="text-white font-bold">TS</span>
+                                </div>
+                                <h4 className="font-semibold text-blue-600">TypeScript 5</h4>
+                                <p className="text-xs text-gray-600">Type Safety</p>
+                            </div>
+                            <div className="bg-white rounded-lg shadow-md p-4 text-center">
+                                <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-2">
+                                    <span className="text-white font-bold">🤖</span>
+                                </div>
+                                <h4 className="font-semibold text-green-600">Gemini 2.0 Flash</h4>
+                                <p className="text-xs text-gray-600">@google/genai</p>
+                            </div>
+                            <div className="bg-white rounded-lg shadow-md p-4 text-center">
+                                <div className="w-12 h-12 bg-cyan-500 rounded-full flex items-center justify-center mx-auto mb-2">
+                                    <span className="text-white font-bold">🎨</span>
+                                </div>
+                                <h4 className="font-semibold text-cyan-600">Tailwind CSS</h4>
+                                <p className="text-xs text-gray-600">Utility-First Styling</p>
+                            </div>
                         </div>
-                        <div className="text-center">
-                            <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-3">
-                                <span className="text-white font-bold">🤖</span>
+                    </div>
+
+                    {/* Backend Stack */}
+                    <div className="mb-8">
+                        <h3 className="text-xl font-semibold text-purple-600 mb-4 text-center">
+                            Backend (MCP Tool Server)
+                        </h3>
+                        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div className="bg-white rounded-lg shadow-md p-4 text-center">
+                                <div className="w-12 h-12 bg-green-600 rounded-full flex items-center justify-center mx-auto mb-2">
+                                    <span className="text-white font-bold">⚡</span>
+                                </div>
+                                <h4 className="font-semibold text-green-600">FastAPI</h4>
+                                <p className="text-xs text-gray-600">Async Python Web Framework</p>
                             </div>
-                            <h3 className="font-semibold text-green-600">Gemini 2.0</h3>
-                            <p className="text-sm text-gray-600">Function Calling</p>
+                            <div className="bg-white rounded-lg shadow-md p-4 text-center">
+                                <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center mx-auto mb-2">
+                                    <span className="text-white font-bold">🐍</span>
+                                </div>
+                                <h4 className="font-semibold text-blue-600">Python 3.13</h4>
+                                <p className="text-xs text-gray-600">Runtime Environment</p>
+                            </div>
+                            <div className="bg-white rounded-lg shadow-md p-4 text-center">
+                                <div className="w-12 h-12 bg-purple-500 rounded-full flex items-center justify-center mx-auto mb-2">
+                                    <span className="text-white font-bold">🔗</span>
+                                </div>
+                                <h4 className="font-semibold text-purple-600">LangChain</h4>
+                                <p className="text-xs text-gray-600">LLM Application Framework</p>
+                            </div>
+                            <div className="bg-white rounded-lg shadow-md p-4 text-center">
+                                <div className="w-12 h-12 bg-red-500 rounded-full flex items-center justify-center mx-auto mb-2">
+                                    <span className="text-white font-bold">🗃️</span>
+                                </div>
+                                <h4 className="font-semibold text-red-600">ChromaDB</h4>
+                                <p className="text-xs text-gray-600">Vector Database</p>
+                            </div>
                         </div>
-                        <div className="text-center">
-                            <div className="w-16 h-16 bg-purple-500 rounded-full flex items-center justify-center mx-auto mb-3">
-                                <span className="text-white font-bold">🐍</span>
+                    </div>
+
+                    {/* AI Services */}
+                    <div className="mb-8">
+                        <h3 className="text-xl font-semibold text-orange-600 mb-4 text-center">
+                            AI & ML Services
+                        </h3>
+                        <div className="grid md:grid-cols-3 gap-4">
+                            <div className="bg-white rounded-lg shadow-md p-4 text-center">
+                                <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-2">
+                                    <span className="text-white font-bold">🎤</span>
+                                </div>
+                                <h4 className="font-semibold text-green-600">OpenAI Whisper</h4>
+                                <p className="text-xs text-gray-600">whisper-1 Speech-to-Text</p>
                             </div>
-                            <h3 className="font-semibold text-purple-600">FastAPI</h3>
-                            <p className="text-sm text-gray-600">Python Backend</p>
+                            <div className="bg-white rounded-lg shadow-md p-4 text-center">
+                                <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center mx-auto mb-2">
+                                    <span className="text-white font-bold">🔍</span>
+                                </div>
+                                <h4 className="font-semibold text-blue-600">OpenAI Embeddings</h4>
+                                <p className="text-xs text-gray-600">text-embedding-ada-002</p>
+                            </div>
+                            <div className="bg-white rounded-lg shadow-md p-4 text-center">
+                                <div className="w-12 h-12 bg-purple-500 rounded-full flex items-center justify-center mx-auto mb-2">
+                                    <span className="text-white font-bold">🤖</span>
+                                </div>
+                                <h4 className="font-semibold text-purple-600">Google Gemini</h4>
+                                <p className="text-xs text-gray-600">2.0 Flash</p>
+                            </div>
                         </div>
-                        <div className="text-center">
-                            <div className="w-16 h-16 bg-orange-500 rounded-full flex items-center justify-center mx-auto mb-3">
-                                <span className="text-white font-bold">🎤</span>
+                    </div>
+
+                    {/* DevOps */}
+                    <div>
+                        <h3 className="text-xl font-semibold text-gray-600 mb-4 text-center">
+                            DevOps & Infrastructure
+                        </h3>
+                        <div className="grid md:grid-cols-4 gap-4">
+                            <div className="bg-white rounded-lg shadow-md p-4 text-center">
+                                <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center mx-auto mb-2">
+                                    <span className="text-white font-bold">🐳</span>
+                                </div>
+                                <h4 className="font-semibold text-blue-600">Docker</h4>
+                                <p className="text-xs text-gray-600">Containerization</p>
                             </div>
-                            <h3 className="font-semibold text-orange-600">Whisper</h3>
-                            <p className="text-sm text-gray-600">Speech-to-Text</p>
+                            <div className="bg-white rounded-lg shadow-md p-4 text-center">
+                                <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-2">
+                                    <span className="text-white font-bold">📦</span>
+                                </div>
+                                <h4 className="font-semibold text-green-600">Poetry</h4>
+                                <p className="text-xs text-gray-600">Python Dependencies</p>
+                            </div>
+                            <div className="bg-white rounded-lg shadow-md p-4 text-center">
+                                <div className="w-12 h-12 bg-red-500 rounded-full flex items-center justify-center mx-auto mb-2">
+                                    <span className="text-white font-bold">🌐</span>
+                                </div>
+                                <h4 className="font-semibold text-red-600">JSON-RPC 2.0</h4>
+                                <p className="text-xs text-gray-600">Tool Invocation Protocol</p>
+                            </div>
+                            <div className="bg-white rounded-lg shadow-md p-4 text-center">
+                                <div className="w-12 h-12 bg-orange-500 rounded-full flex items-center justify-center mx-auto mb-2">
+                                    <span className="text-white font-bold">📡</span>
+                                </div>
+                                <h4 className="font-semibold text-orange-600">MCP</h4>
+                                <p className="text-xs text-gray-600">Model Context Protocol</p>
+                            </div>
                         </div>
                     </div>
                 </section>
+
+                {/* Performance Metrics */}
+                <section className="mb-16">
+                    <h2 className="text-3xl font-bold text-center text-gray-800 mb-8">
+                        Performance Metrics
+                    </h2>
+                    <div className="grid md:grid-cols-3 gap-6">
+                        <div className="bg-white rounded-lg shadow-md p-6 text-center">
+                            <div className="text-3xl font-bold text-blue-600 mb-2">~200ms</div>
+                            <h3 className="text-lg font-semibold text-gray-800 mb-2">Semantic Search</h3>
+                            <p className="text-sm text-gray-600">ChromaDB vector similarity search response time</p>
+                        </div>
+                        <div className="bg-white rounded-lg shadow-md p-6 text-center">
+                            <div className="text-3xl font-bold text-green-600 mb-2">~1-3s</div>
+                            <h3 className="text-lg font-semibold text-gray-800 mb-2">Voice Transcription</h3>
+                            <p className="text-sm text-gray-600">OpenAI Whisper speech-to-text processing</p>
+                        </div>
+                        <div className="bg-white rounded-lg shadow-md p-6 text-center">
+                            <div className="text-3xl font-bold text-purple-600 mb-2">~500ms</div>
+                            <h3 className="text-lg font-semibold text-gray-800 mb-2">End-to-End</h3>
+                            <p className="text-sm text-gray-600">Complete query processing (text input)</p>
+                        </div>
+                    </div>
+                </section>
+
+                {/* Footer */}
+                <footer className="text-center pt-8 border-t border-gray-200">
+                    <p className="text-gray-600 mb-4">
+                        Built with ❤️ using Model Context Protocol principles
+                    </p>
+                    <div className="flex justify-center space-x-4">
+                        <a 
+                            href="https://github.com/yourusername/mcp-voice-app" 
+                            className="text-blue-600 hover:underline"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            GitHub Repository
+                        </a>
+                        <a 
+                            href="http://localhost:8000/docs" 
+                            className="text-purple-600 hover:underline"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            API Documentation
+                        </a>
+                    </div>
+                </footer>
             </div>
         </main>
     );

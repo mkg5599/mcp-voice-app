@@ -15,10 +15,22 @@ const ProductCard = ({ product }: { product: Product }) => (
   <div className="bg-white rounded-lg border shadow-md p-6 hover:shadow-lg transition-shadow">
     <div className="mb-3 flex items-start justify-between">
       <h3 className="text-lg font-bold text-gray-800">{product.name}</h3>
-      <span className="rounded-full bg-gradient-to-r from-blue-500 to-purple-500 px-3 py-1 text-sm font-semibold text-white">
-        {formatPrice(product.price)}
-      </span>
+      <div className="flex flex-col items-end gap-2">
+        <span className="rounded-full bg-gradient-to-r from-blue-500 to-purple-500 px-3 py-1 text-sm font-semibold text-white">
+          {formatPrice(product.price)}
+        </span>
+        {product.similarity_score && (
+          <span className="rounded-full bg-green-100 text-green-700 px-2 py-1 text-xs font-medium">
+            {Math.round(product.similarity_score * 100)}% match
+          </span>
+        )}
+      </div>
     </div>
+    
+    {product.description && (
+      <p className="text-sm text-gray-600 mb-3 line-clamp-2">{product.description}</p>
+    )}
+    
     <div className="space-y-2 text-sm text-gray-600">
       <p>
         <span className="font-semibold text-gray-700">City:</span> {product.city}
@@ -36,6 +48,22 @@ const ProductCard = ({ product }: { product: Product }) => (
           ))}
         </div>
       </div>
+      {product.tags && product.tags.length > 0 && (
+        <div className="flex items-center flex-wrap gap-1 mt-2">
+          <span className="text-xs font-semibold text-gray-700">Tags:</span>
+          {product.tags.slice(0, 3).map((tag) => (
+            <span
+              key={tag}
+              className="inline-block bg-gray-100 text-gray-700 text-xs px-2 py-1 rounded-full"
+            >
+              {tag}
+            </span>
+          ))}
+          {product.tags.length > 3 && (
+            <span className="text-xs text-gray-500">+{product.tags.length - 3} more</span>
+          )}
+        </div>
+      )}
     </div>
   </div>
 );
@@ -47,6 +75,7 @@ export default function Home() {
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [searchText, setSearchText] = useState("");
+  const [lastSearchType, setLastSearchType] = useState<string>("");
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
@@ -55,6 +84,7 @@ export default function Home() {
     if (!q) return;
     setIsLoading(true);
     setModelMessage("");
+    setLastSearchType("");
     try {
       const r = await fetch("/api/chat", {
         method: "POST",
@@ -66,19 +96,23 @@ export default function Home() {
         if (Array.isArray(data.products)) {
           setProducts(data.products as Product[]);
           setModelMessage(data.message || "");
+          setLastSearchType(data.tool_called || "");
         } else {
           setProducts([]);
           setModelMessage(data.message || "No tool results.");
+          setLastSearchType("");
         }
       } else {
         console.error("chat error", data.error);
         setProducts([]);
         setModelMessage(data.error || "Error");
+        setLastSearchType("");
       }
     } catch (e) {
       console.error("fetch error", e);
       setProducts([]);
       setModelMessage("Network error");
+      setLastSearchType("");
     } finally {
       setIsLoading(false);
     }
@@ -168,6 +202,26 @@ export default function Home() {
 
   const canInteract = !isTranscribing;
 
+  const getSearchTypeIndicator = () => {
+    if (!lastSearchType) return null;
+    
+    const types = {
+      'list_products': { icon: '📋', label: 'List All', color: 'blue' },
+      'search_products': { icon: '🔍', label: 'Filter Search', color: 'green' },
+      'semantic_product_search': { icon: '🤖', label: 'AI Semantic Search', color: 'purple' }
+    };
+    
+    const type = types[lastSearchType as keyof typeof types];
+    if (!type) return null;
+    
+    return (
+      <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium bg-${type.color}-100 text-${type.color}-700`}>
+        <span>{type.icon}</span>
+        <span>{type.label}</span>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
       <header className="bg-white/95 backdrop-blur-md shadow-lg border-b border-indigo-100">
@@ -221,8 +275,9 @@ export default function Home() {
         <h2 className="text-2xl font-semibold text-gray-700 mb-3">Talk or type to explore our catalog</h2>
         <p className="text-lg text-gray-600 max-w-2xl mx-auto">
           Powered by <span className="font-semibold text-blue-600">Gemini Flash</span> +
-          <span className="font-semibold text-green-600"> Whisper</span> ·
-          Tools exposed through the <span className="font-semibold text-purple-600">Model Context Protocol</span>
+          <span className="font-semibold text-green-600"> Whisper</span> +
+          <span className="font-semibold text-purple-600"> Vector Search</span> ·
+          Tools exposed through the <span className="font-semibold text-orange-600">Model Context Protocol</span>
         </p>
       </section>
 
@@ -231,9 +286,16 @@ export default function Home() {
           <SearchPromptModal onSelect={onPromptSelect} />
         </div>
 
-        {modelMessage && !products.length && (
-          <div className="bg-white/80 backdrop-blur-sm rounded-lg shadow-md p-6 text-center">
-            <p className="text-gray-700 text-lg">{modelMessage}</p>
+        {(modelMessage || lastSearchType) && (
+          <div className="bg-white/80 backdrop-blur-sm rounded-lg shadow-md p-6">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div className="flex-1">
+                {modelMessage && (
+                  <p className="text-gray-700 text-lg">{modelMessage}</p>
+                )}
+              </div>
+              {getSearchTypeIndicator()}
+            </div>
           </div>
         )}
 
