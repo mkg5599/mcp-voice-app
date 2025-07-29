@@ -83,7 +83,7 @@ async def initialize_application():
         print(f"   OpenAI Embeddings: {'Ready' if embeddings_ready else 'Failed'}")
         print(f"   Vector Store: In-memory ({vector_count} documents)")
         print(f"   Semantic Search: {'Ready' if embeddings_ready else 'Unavailable'}")
-        print(f"   Bundle Size: ~25-30MB (No external vector DB!)")
+        print("   Bundle Size: ~25-30MB (No external vector DB!)")
         print(f"   MCP Service: {'Initialized' if mcp.product_service is not None else 'Failed'}")
         print(f"   Products Service: {'Initialized' if products.product_service is not None else 'Failed'}")
         

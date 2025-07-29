@@ -86,4 +86,24 @@ def test_healthz():
     assert response.status_code == 200
     data = response.json()
     assert "ok" in data
-    assert "vector_store_ready" in data
+    assert data["ok"] is True
+    
+    # Check for the correct nested structure
+    assert "vector_store" in data
+    vector_store_info = data["vector_store"]
+    assert "type" in vector_store_info
+    assert "embeddings_ready" in vector_store_info
+    assert "document_count" in vector_store_info
+    assert "vector_search_available" in vector_store_info
+    
+    # Check other expected fields
+    assert "deployment" in data
+    assert "products_loaded" in data
+    assert "available_methods" in data
+    assert "approach" in data
+    assert "bundle_optimized" in data
+    assert "estimated_size" in data
+    
+    # Verify available methods
+    expected_methods = ["list_products", "search_products", "semantic_product_search"]
+    assert data["available_methods"] == expected_methods

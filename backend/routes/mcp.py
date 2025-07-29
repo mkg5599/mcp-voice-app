@@ -1,6 +1,7 @@
 """MCP JSON-RPC endpoints."""
 import json
 import time
+from typing import Any, Dict, Optional
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from models.requests import JsonRpcRequest, ProductSearch, SemanticSearch
@@ -12,9 +13,9 @@ from config.settings import IS_VERCEL, PROMPTS_CONFIG
 router = APIRouter(tags=["MCP"])
 
 # Global instances (will be injected from main.py)
-product_service: ProductService = None
+product_service: Optional[ProductService] = None
 
-def init_mcp_routes(vector_store: InMemoryVectorStore):
+def init_mcp_routes(vector_store: InMemoryVectorStore) -> None:
     """Initialize MCP routes with dependencies."""
     global product_service
     product_service = ProductService(vector_store)
@@ -50,25 +51,17 @@ async def mcp_endpoint(req: JsonRpcRequest):
         )
 
     # Define async routing with proper service validation
-    async def route_method(method: str, params: dict):
-        try:
-            service = get_product_service()
-            
-            if method == "list_products":
-                return service.list_products()
-            elif method == "search_products":
-                return service.search_products(ProductSearch(**(params or {})))
-            elif method == "semantic_product_search":
-                return await service.semantic_search(SemanticSearch(**(params or {})))
-            else:
-                raise ValueError(f"Method '{method}' not found")
-        except HTTPException as e:
-            # Re-raise HTTP exceptions (service initialization errors)
-            raise e
-        except Exception as e:
-            # Handle other service errors
-            print(f"Service method error for {method}: {e}")
-            raise e
+    async def route_method(method: str, params: Optional[Dict[str, Any]]):
+        service = get_product_service()
+        
+        if method == "list_products":
+            return service.list_products()
+        elif method == "search_products":
+            return service.search_products(ProductSearch(**(params or {})))
+        elif method == "semantic_product_search":
+            return await service.semantic_search(SemanticSearch(**(params or {})))
+        else:
+            raise ValueError(f"Method '{method}' not found")
 
     valid_methods = ["list_products", "search_products", "semantic_product_search"]
     if req.method not in valid_methods:
@@ -91,7 +84,7 @@ async def mcp_endpoint(req: JsonRpcRequest):
         try:
             service = get_product_service()
             vector_available = embedding_service.is_ready() and service.vector_store.count() > 0
-        except:
+        except (HTTPException, AttributeError, RuntimeError):
             vector_available = False
         
         print(json.dumps({
@@ -130,8 +123,8 @@ async def mcp_endpoint(req: JsonRpcRequest):
             status_code=500,
         )
     
-    except Exception as exc:
-        # Handle other errors
+    except (ValueError, TypeError, AttributeError, RuntimeError) as exc:
+        # Handle specific known errors
         duration_ms = int((time.time() - t0) * 1000)
         error_msg = str(exc)
         print(f"JSON-RPC error: {error_msg}")
@@ -143,13 +136,38 @@ async def mcp_endpoint(req: JsonRpcRequest):
             "params": req.params,
             "duration_ms": duration_ms,
             "error": error_msg,
-            "error_type": "general",
+            "error_type": "service_error",
             "service_initialized": product_service is not None
         }))
         return JSONResponse(
             {
                 "jsonrpc": "2.0",
                 "error": {"code": -32000, "message": error_msg},
+                "id": req.id,
+            },
+            status_code=500,
+        )
+    
+    except Exception as exc:
+        # Handle any other unexpected errors
+        duration_ms = int((time.time() - t0) * 1000)
+        error_msg = f"Unexpected error: {str(exc)}"
+        print(f"JSON-RPC unexpected error: {error_msg}")
+        import traceback
+        traceback.print_exc()
+        print(json.dumps({
+            "evt": "json_rpc_request_error",
+            "method": req.method,
+            "params": req.params,
+            "duration_ms": duration_ms,
+            "error": error_msg,
+            "error_type": "unexpected",
+            "service_initialized": product_service is not None
+        }))
+        return JSONResponse(
+            {
+                "jsonrpc": "2.0",
+                "error": {"code": -32000, "message": "Internal server error"},
                 "id": req.id,
             },
             status_code=500,

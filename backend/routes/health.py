@@ -1,4 +1,5 @@
 """Health check endpoints."""
+from typing import Optional
 from fastapi import APIRouter
 from services.embedding_service import embedding_service
 from services.vector_store import InMemoryVectorStore
@@ -8,9 +9,9 @@ from config.settings import IS_VERCEL, PROMPTS_CONFIG
 router = APIRouter(tags=["Health"])
 
 # Global instances (will be injected from main.py)
-vector_store: InMemoryVectorStore = None
+vector_store: Optional[InMemoryVectorStore] = None
 
-def init_health_routes(vs: InMemoryVectorStore):
+def init_health_routes(vs: InMemoryVectorStore) -> None:
     """Initialize health routes with dependencies."""
     global vector_store
     vector_store = vs
@@ -32,6 +33,12 @@ def index():
             "embeddings_ready": "Available" if embeddings_available else "Unavailable",
             "document_count": vector_count,
             "bundle_size": "~25-30MB (No external vector DB!)"
+        },
+        "optimization": {
+            "removed_dependencies": ["chromadb", "external_vector_db"],
+            "kept_functionality": ["semantic_search", "vector_embeddings"],
+            "vercel_compatible": True,
+            "approach": "Pure OpenAI + In-Memory Cosine Similarity"
         },
         "mcp": {
             "discovery_endpoint": "/.well-known/mcp.json",

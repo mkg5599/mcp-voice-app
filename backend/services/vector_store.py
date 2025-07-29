@@ -1,17 +1,17 @@
 """In-memory vector store implementation."""
 import math
-from typing import Dict, List
+from typing import Any, Dict, List
 
 class InMemoryVectorStore:
     """Lightweight in-memory vector store using OpenAI embeddings."""
     
-    def __init__(self):
+    def __init__(self) -> None:
         self.embeddings_map: Dict[str, List[float]] = {}
         self.documents_map: Dict[str, str] = {}
-        self.metadata_map: Dict[str, Dict] = {}
+        self.metadata_map: Dict[str, Dict[str, Any]] = {}
         
     def add_documents(self, ids: List[str], embeddings: List[List[float]], 
-                    documents: List[str], metadatas: List[Dict]):
+                     documents: List[str], metadatas: List[Dict[str, Any]]) -> None:
         """Add documents to the vector store."""
         for i, doc_id in enumerate(ids):
             self.embeddings_map[doc_id] = embeddings[i]
@@ -30,13 +30,13 @@ class InMemoryVectorStore:
         
         return dot_product / (magnitude_a * magnitude_b)
     
-    def similarity_search(self, query_embedding: List[float], k: int = 5) -> List[Dict]:
+    def similarity_search(self, query_embedding: List[float], k: int = 5) -> List[Dict[str, Any]]:
         """Perform similarity search and return top k results."""
         if not self.embeddings_map:
             return []
         
         # Calculate similarities for all documents
-        similarities = []
+        similarities: List[Dict[str, Any]] = []
         for doc_id, doc_embedding in self.embeddings_map.items():
             similarity = self.cosine_similarity(query_embedding, doc_embedding)
             similarities.append({
@@ -47,14 +47,14 @@ class InMemoryVectorStore:
             })
         
         # Sort by similarity (highest first) and return top k
-        similarities.sort(key=lambda x: x['similarity'], reverse=True)
+        similarities.sort(key=lambda x: float(x['similarity']), reverse=True)
         return similarities[:k]
     
     def count(self) -> int:
         """Get total number of documents."""
         return len(self.embeddings_map)
     
-    def clear(self):
+    def clear(self) -> None:
         """Clear all documents from the vector store."""
         self.embeddings_map.clear()
         self.documents_map.clear()

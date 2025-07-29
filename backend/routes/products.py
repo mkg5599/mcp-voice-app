@@ -1,4 +1,5 @@
 """Product REST endpoints."""
+from typing import Optional
 from fastapi import APIRouter, HTTPException
 from models.requests import ProductSearch, SemanticSearch
 from services.product_service import ProductService
@@ -7,9 +8,9 @@ from services.vector_store import InMemoryVectorStore
 router = APIRouter(prefix="/products", tags=["Products"])
 
 # Global instances (will be injected from main.py)
-product_service: ProductService = None
+product_service: Optional[ProductService] = None
 
-def init_product_routes(vector_store: InMemoryVectorStore):
+def init_product_routes(vector_store: InMemoryVectorStore) -> None:
     """Initialize product routes with dependencies."""
     global product_service
     product_service = ProductService(vector_store)
