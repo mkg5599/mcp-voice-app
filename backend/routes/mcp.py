@@ -4,10 +4,11 @@ import time
 from typing import Any, Dict, Optional
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
-from models.requests import JsonRpcRequest, ProductSearch, SemanticSearch
+from models.requests import JsonRpcRequest, ProductSearch, SemanticSearch, RagRequest
 from services.product_service import ProductService
 from services.vector_store import InMemoryVectorStore
 from services.embedding_service import embedding_service
+from services.llm_service import llm_service
 from config.settings import IS_VERCEL, PROMPTS_CONFIG
 
 router = APIRouter(tags=["MCP"])
@@ -39,6 +40,7 @@ async def mcp_endpoint(req: JsonRpcRequest):
     - list_products: Get all products
     - search_products: Filter products by criteria
     - semantic_product_search: Natural language product search via in-memory vector store
+    - rag_query: RAG-powered conversational product assistance
     """
     if req.jsonrpc != "2.0":
         return JSONResponse(
@@ -60,10 +62,12 @@ async def mcp_endpoint(req: JsonRpcRequest):
             return service.search_products(ProductSearch(**(params or {})))
         elif method == "semantic_product_search":
             return await service.semantic_search(SemanticSearch(**(params or {})))
+        elif method == "rag_query":
+            return await service.rag_query(RagRequest(**(params or {})))
         else:
             raise ValueError(f"Method '{method}' not found")
 
-    valid_methods = ["list_products", "search_products", "semantic_product_search"]
+    valid_methods = ["list_products", "search_products", "semantic_product_search", "rag_query"]
     if req.method not in valid_methods:
         return JSONResponse(
             {
@@ -81,11 +85,14 @@ async def mcp_endpoint(req: JsonRpcRequest):
         
         # Safe check for vector store availability
         vector_available = False
+        llm_available = False
         try:
             service = get_product_service()
             vector_available = embedding_service.is_ready() and service.vector_store.count() > 0
+            llm_available = llm_service.is_ready()
         except (HTTPException, AttributeError, RuntimeError):
             vector_available = False
+            llm_available = False
         
         print(json.dumps({
             "evt": "json_rpc_request",
@@ -94,6 +101,7 @@ async def mcp_endpoint(req: JsonRpcRequest):
             "result_count": len(result) if isinstance(result, list) else None,
             "duration_ms": duration_ms,
             "vector_store": f"in_memory:{vector_available}",
+            "llm_service": f"openai:{llm_available}",
             "deployment": "vercel" if IS_VERCEL else "local",
             "bundle_optimized": True,
             "service_initialized": product_service is not None
@@ -197,6 +205,7 @@ def mcp_health():
     return {
         "service_initialized": product_service is not None,
         "embedding_service_ready": embedding_service.is_ready(),
+        "llm_service_ready": llm_service.is_ready(),
         "vector_store_count": product_service.vector_store.count() if product_service else 0,
-        "available_methods": ["list_products", "search_products", "semantic_product_search"]
+        "available_methods": ["list_products", "search_products", "semantic_product_search", "rag_query"]
     }

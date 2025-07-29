@@ -1,7 +1,7 @@
 mcp_discovery:
   name: "product-tools"
   version: "1.0"
-  description: "Product catalog tools (list & filtered search)."
+  description: "Product catalog tools with RAG-powered AI assistance."
   tools:
     - name: "list_products"
       description: "List all products."
@@ -22,3 +22,11 @@ mcp_discovery:
         properties:
           query: { "type": "string" }
           top_k: { "type": "number" }
+    - name: "rag_query"
+      description: "RAG-powered conversational product assistance with AI-generated responses."
+      input_schema:
+        type: "object"
+        properties:
+          query: { "type": "string" }
+          context_size: { "type": "number" }
+          system_prompt: { "type": "string" }

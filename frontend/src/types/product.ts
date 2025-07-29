@@ -23,3 +23,18 @@ export interface SemanticSearch {
   query: string;
   top_k?: number;
 }
+
+export interface RagRequest {
+  query: string;
+  context_size?: number;
+  system_prompt?: string;
+}
+
+export interface RagResponse {
+  query: string;
+  ai_response: string;
+  retrieved_products: Product[];
+  context_size: number;
+  similarity_threshold: number;
+  processing_time_ms: number;
+}

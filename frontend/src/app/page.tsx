@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Product } from "../types/product";
 import SearchPromptModal from "../components/SearchPromptModal";
-import { Bot } from "lucide-react";
+import { Bot, MessageCircle } from "lucide-react";
 import Link from "next/link";
 
 const formatPrice = (p: number) =>
@@ -236,6 +236,13 @@ export default function Home() {
             >
               About
             </Link>
+            <Link
+              href="/rag"
+              className="flex items-center gap-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2 rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all duration-200 shadow-md hover:shadow-lg font-semibold"
+            >
+              <MessageCircle className="w-4 h-4" />
+              AI Chat
+            </Link>
           </div>
 
           <div className="relative flex w-full max-w-lg items-center">
@@ -273,15 +280,27 @@ export default function Home() {
           Agentic Product Search
         </h1>
         <h2 className="text-2xl font-semibold text-gray-700 mb-3">Talk or type to explore our catalog</h2>
-        <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+        <p className="text-lg text-gray-600 max-w-2xl mx-auto mb-6">
           Powered by <span className="font-semibold text-blue-600">Gemini Flash</span> +
           <span className="font-semibold text-green-600"> Whisper</span> +
           <span className="font-semibold text-purple-600"> Vector Search</span> ·
           Tools exposed through the <span className="font-semibold text-orange-600">Model Context Protocol</span>
         </p>
+        
+        {/* RAG CTA */}
+        <div className="flex justify-center">
+          <Link
+            href="/rag"
+            className="inline-flex items-center gap-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 py-3 rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all duration-200 shadow-lg hover:shadow-xl font-semibold text-lg"
+          >
+            <MessageCircle className="w-5 h-5" />
+            Try AI Chat Assistant
+            <span className="text-sm bg-white/20 px-2 py-1 rounded-full">RAG</span>
+          </Link>
+        </div>
       </section>
 
-      <main className="container mx-auto px-6 py-8 space-y-8">
+      <main className="container mx-auto px-6 py-6 space-y-8">
         <div className="flex justify-center">
           <SearchPromptModal onSelect={onPromptSelect} />
         </div>

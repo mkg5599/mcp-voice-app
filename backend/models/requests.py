@@ -14,6 +14,12 @@ class SemanticSearch(BaseModel):
     query: str
     top_k: Optional[int] = 5
 
+class RagRequest(BaseModel):
+    """Model for RAG query parameters."""
+    query: str
+    context_size: Optional[int] = 5
+    system_prompt: Optional[str] = None
+
 class JsonRpcRequest(BaseModel):
     """Model for JSON-RPC requests."""
     jsonrpc: str = "2.0"

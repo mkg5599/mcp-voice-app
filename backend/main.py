@@ -14,6 +14,7 @@ from config.settings import ALLOWED_ORIGINS, IS_VERCEL
 # Import services
 from services.vector_store import InMemoryVectorStore
 from services.embedding_service import embedding_service
+from services.llm_service import llm_service
 from services.product_service import ProductService
 
 # Import routes
@@ -59,6 +60,11 @@ async def initialize_application():
         embeddings_ready = await embedding_service.initialize()
         print(f"Embedding service ready: {embeddings_ready}")
         
+        # Initialize LLM service for RAG
+        print("Initializing LLM service...")
+        llm_ready = await llm_service.initialize()
+        print(f"LLM service ready: {llm_ready}")
+        
         if embeddings_ready:
             # Initialize product service and populate vector store
             print("Creating product service...")
@@ -81,8 +87,10 @@ async def initialize_application():
         
         print(f"Application initialization complete ({elapsed:.2f}s):")
         print(f"   OpenAI Embeddings: {'Ready' if embeddings_ready else 'Failed'}")
+        print(f"   OpenAI LLM: {'Ready' if llm_ready else 'Failed'}")
         print(f"   Vector Store: In-memory ({vector_count} documents)")
         print(f"   Semantic Search: {'Ready' if embeddings_ready else 'Unavailable'}")
+        print(f"   RAG Available: {'Ready' if llm_ready and embeddings_ready else 'Unavailable'}")
         print("   Bundle Size: ~25-30MB (No external vector DB!)")
         print(f"   MCP Service: {'Initialized' if mcp.product_service is not None else 'Failed'}")
         print(f"   Products Service: {'Initialized' if products.product_service is not None else 'Failed'}")
@@ -103,11 +111,11 @@ async def initialize_application():
 
 # Create FastAPI application
 app = FastAPI(
-    title="MCP Product Tool Server",
+    title="MCP Product Tool Server with RAG",
     version="0.1.0",
     description=(
         "FastAPI backend exposing product catalog functions as MCP-discoverable tools. "
-        "In-memory vector search using OpenAI embeddings (no external vector DB). "
+        "Features in-memory vector search using OpenAI embeddings and RAG-powered AI assistance. "
         "Optimized for Vercel serverless deployment under 250MB limit."
     ),
     lifespan=lifespan

@@ -37,3 +37,12 @@ EMBEDDING_BATCH_SIZE = 5 if IS_VERCEL else 10
 EMBEDDING_MODEL = "text-embedding-ada-002"
 EMBEDDING_TIMEOUT = 60
 EMBEDDING_MAX_RETRIES = 3
+
+# LLM Configuration for RAG
+LLM_MODEL = os.getenv("LLM_MODEL", "gpt-3.5-turbo")
+LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.7"))
+LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "500"))
+
+# RAG Configuration  
+RAG_CONTEXT_SIZE = int(os.getenv("RAG_CONTEXT_SIZE", "5"))
+RAG_SIMILARITY_THRESHOLD = float(os.getenv("RAG_SIMILARITY_THRESHOLD", "0.3"))

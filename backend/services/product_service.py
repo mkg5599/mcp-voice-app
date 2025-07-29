@@ -2,11 +2,12 @@
 import json
 import time
 from typing import Any, Dict, List
-from models.requests import ProductSearch, SemanticSearch
+from models.requests import ProductSearch, SemanticSearch, RagRequest
 from services.vector_store import InMemoryVectorStore
 from services.embedding_service import embedding_service
+from services.llm_service import llm_service
 from utils.cache import load_products
-from config.settings import EMBEDDING_BATCH_SIZE, IS_VERCEL
+from config.settings import EMBEDDING_BATCH_SIZE, IS_VERCEL, RAG_CONTEXT_SIZE, RAG_SIMILARITY_THRESHOLD
 
 class ProductService:
     """Service for product operations and search."""
@@ -105,6 +106,70 @@ class ProductService:
             }))
             # Fall back to simple text search
             return self.fallback_text_search(params.query, params.top_k or 5)
+
+    async def rag_query(self, params: RagRequest) -> Dict[str, Any]:
+        """Perform RAG query: retrieve relevant products and generate AI response."""
+        if not llm_service.is_ready():
+            raise RuntimeError("LLM service not initialized. RAG unavailable.")
+        
+        t0 = time.time()
+        try:
+            print(f"Performing RAG query for: '{params.query}'")
+            
+            # Step 1: Retrieve relevant products using semantic search
+            semantic_params = SemanticSearch(
+                query=params.query, 
+                top_k=params.context_size or RAG_CONTEXT_SIZE
+            )
+            retrieved_products = await self.semantic_search(semantic_params)
+            
+            # Step 2: Filter by similarity threshold (optional)
+            filtered_products = [
+                p for p in retrieved_products 
+                if p.get('similarity_score', 0) >= RAG_SIMILARITY_THRESHOLD
+            ]
+            
+            # Step 3: Generate response using LLM
+            ai_response = await llm_service.generate_response(
+                query=params.query,
+                context_products=filtered_products,
+                system_prompt=params.system_prompt
+            )
+            
+            duration_ms = int((time.time() - t0) * 1000)
+            
+            result = {
+                "query": params.query,
+                "ai_response": ai_response,
+                "retrieved_products": filtered_products,
+                "context_size": len(filtered_products),
+                "similarity_threshold": RAG_SIMILARITY_THRESHOLD,
+                "processing_time_ms": duration_ms
+            }
+            
+            print(json.dumps({
+                "evt": "rag_query",
+                "query": params.query,
+                "context_products": len(filtered_products),
+                "duration_ms": duration_ms,
+                "response_length": len(ai_response),
+                "deployment": "vercel" if IS_VERCEL else "local"
+            }))
+            
+            return result
+            
+        except Exception as e:
+            duration_ms = int((time.time() - t0) * 1000)
+            print(f"RAG query error: {e}")
+            import traceback
+            traceback.print_exc()
+            print(json.dumps({
+                "evt": "rag_query_error",
+                "query": params.query,
+                "duration_ms": duration_ms,
+                "error": str(e)
+            }))
+            raise e
 
     def fallback_text_search(self, query: str, top_k: int) -> List[Dict[str, Any]]:
         """Fallback text search when vector search is unavailable."""

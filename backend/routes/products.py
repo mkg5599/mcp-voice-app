@@ -1,7 +1,7 @@
 """Product REST endpoints."""
 from typing import Optional
 from fastapi import APIRouter, HTTPException
-from models.requests import ProductSearch, SemanticSearch
+from models.requests import ProductSearch, SemanticSearch, RagRequest
 from services.product_service import ProductService
 from services.vector_store import InMemoryVectorStore
 
@@ -42,6 +42,12 @@ async def semantic_search(search_params: SemanticSearch):
     """Perform semantic search using in-memory vector store + OpenAI embeddings."""
     service = get_product_service()
     return await service.semantic_search(search_params)
+
+@router.post("/rag")
+async def rag_query(rag_params: RagRequest):
+    """Perform RAG query: retrieve relevant products and generate AI response."""
+    service = get_product_service()
+    return await service.rag_query(rag_params)
 
 @router.get("/health")
 def products_health():

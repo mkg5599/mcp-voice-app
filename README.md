@@ -1,17 +1,18 @@
-# [Agentic Product App - Based on Model Context Protocol](https://mcp-voice-app.manojkumargummadi.com/)
+# [Agentic Product App - Model Context Protocol + RAG](https://mcp-voice-app.manojkumargummadi.com/)
 
-An end-to-end **voice + natural language product search** application demonstrating:
+An end-to-end **voice + natural language product search + AI chat assistant** application demonstrating:
 
-* **Next.js (React + TypeScript)** acting as an *MCP Host* (LLM orchestration + Whisper transcription).
-* **FastAPI (Python)** as a **pure MCP Tool Server** exposing structured product functions and semantic search.
+* **Next.js (React + TypeScript)** acting as an *MCP Host* (LLM orchestration + Whisper transcription + RAG interface).
+* **FastAPI (Python)** as a **pure MCP Tool Server** exposing structured product functions, semantic search, and RAG capabilities.
 * **Google Gemini 2.0 Flash (@google/genai)** for semantic interpretation + *automatic function calling*.
 * **OpenAI Whisper (via Next.js serverless route)** for speech-to-text transcription.
 * **In-Memory Vector Search** powered by LangChain + OpenAI Embeddings with pure Python cosine similarity.
+* **RAG (Retrieval-Augmented Generation)** using OpenAI GPT models for conversational product assistance.
 * **JSON-RPC 2.0 over HTTP** (`/mcp`) for tool invocation.
 * **MCP-style discovery** via `/.well-known/mcp.json`.
 * **Docker Compose** for local multi-service orchestration.
 
-> This project shows how **Model Context Protocol principles** let you keep **domain tools** (product catalog functions) decoupled, while the **host** layers on voice input + LLM function calling. The backend is a reusable tool server with lightweight semantic search capabilities.
+> This project shows how **Model Context Protocol principles** let you keep **domain tools** (product catalog functions) decoupled, while the **host** layers on voice input + LLM function calling + conversational AI. The backend is a reusable tool server with lightweight semantic search and RAG capabilities.
 
 ---
 
@@ -24,18 +25,19 @@ An end-to-end **voice + natural language product search** application demonstrat
 5. [Gemini Function Calling Flow](#gemini-function-calling-flow)  
 6. [Whisper Speech Transcription](#whisper-speech-transcription)  
 7. [In-Memory Vector Search](#in-memory-vector-search)
-8. [Repository Structure](#repository-structure)  
-9. [Environment Variables](#environment-variables)  
-10. [Local Development](#local-development)  
-11. [Docker & Deployment](#docker--deployment)  
-12. [API Endpoints](#api-endpoints)
-13. [Extending the Catalog / Tools](#extending-the-catalog--tools)  
-14. [Security & Hardening](#security--hardening)  
-15. [Troubleshooting](#troubleshooting)  
-16. [Technology Stack](#technology-stack)
-17. [Roadmap / Future Enhancements](#roadmap--future-enhancements)  
-18. [Contributing](#contributing)  
-19. [License](#license)
+8. [RAG (Retrieval-Augmented Generation)](#rag-retrieval-augmented-generation)
+9. [Repository Structure](#repository-structure)  
+10. [Environment Variables](#environment-variables)  
+11. [Local Development](#local-development)  
+12. [Docker & Deployment](#docker--deployment)  
+13. [API Endpoints](#api-endpoints)
+14. [Extending the Catalog / Tools](#extending-the-catalog--tools)  
+15. [Security & Hardening](#security--hardening)  
+16. [Troubleshooting](#troubleshooting)  
+17. [Technology Stack](#technology-stack)
+18. [Roadmap / Future Enhancements](#roadmap--future-enhancements)  
+19. [Contributing](#contributing)  
+20. [License](#license)
 
 ---
 
@@ -43,13 +45,14 @@ An end-to-end **voice + natural language product search** application demonstrat
 
 | Layer | Role | Technologies | Key Responsibility |
 |-------|------|--------------|--------------------|
-| **Host (UI)** | Accept user text / voice; orchestrate LLM + tools | Next.js, TypeScript, @google/genai, Whisper | Transcribe audio → text; negotiate Gemini function calls; render results |
-| **LLM** | Natural language understanding + tool selection | Gemini 2.0 Flash | Decide whether to call a tool; summarize tool output |
-| **Tool Server** | Deterministic domain functions + semantic search | FastAPI + JSON-RPC façade + LangChain + In-Memory Vector Store | Provide `list_products`, `search_products`, `semantic_product_search` |
-| **MCP Discovery** | Tool metadata | `/.well-known/mcp.json` | Advertise schemas for dynamic functionDeclarations |
+| **Host (UI)** | Accept user text / voice; orchestrate LLM + tools; provide RAG interface | Next.js, TypeScript, @google/genai, Whisper | Transcribe audio → text; negotiate Gemini function calls; RAG chat interface; render results |
+| **LLM** | Natural language understanding + tool selection + conversation generation | Gemini 2.0 Flash + OpenAI GPT | Decide whether to call a tool; summarize tool output; generate conversational responses |
+| **Tool Server** | Deterministic domain functions + semantic search + RAG | FastAPI + JSON-RPC façade + LangChain + In-Memory Vector Store + OpenAI | Provide `list_products`, `search_products`, `semantic_product_search`, `rag_query` |
+| **MCP Discovery** | Tool metadata | `/.well-known/mcp.json` | Advertise schemas for dynamic functionDeclarations including RAG |
 | **Vector Store** | Semantic product embeddings | OpenAI Embeddings + In-Memory Python | Enable natural language product discovery |
+| **RAG System** | Conversational AI with product context | OpenAI GPT + Vector Search Results | Generate contextual product recommendations and explanations |
 
-**Change vs earlier version:** The **backend no longer contains `/transcribe`**—speech belongs firmly to the host layer. **Added lightweight semantic search** with OpenAI embeddings and pure Python similarity search.
+**New in this version:** **RAG-powered conversational AI assistant** that combines semantic search with large language model generation for natural product consultations.
 
 ---
 
@@ -184,6 +187,32 @@ For detailed setup and configuration, see [docs/semantic_search.md](./docs/seman
 
 ---
 
+## RAG (Retrieval-Augmented Generation)
+
+| Component | Technology | Purpose |
+|-----------|------------|---------|
+| **RAG Query** | OpenAI GPT | Generate conversational responses with product context |
+| **Context Retrieval** | In-Memory Vector Search | Provide relevant product information to RAG |
+| **Framework** | LangChain + OpenAI | RAG implementation and orchestration |
+| **Documents** | Product data + embeddings | Knowledge base for RAG |
+
+**Features:**
+- **Conversational AI**: Natural language interactions about products
+- **Contextual Awareness**: Responses grounded in product data
+- **Flexible Queries**: Handle both factual and exploratory queries
+- **Efficient**: Combines retrieval and generation in one step
+
+**Example RAG Flow:**
+```
+User: "Tell me about warm winter clothing"
+→ Embed query and retrieve top products
+→ Generate response: "We have several options like X, Y, Z..."
+```
+
+For detailed setup and configuration, see [docs/rag.md](./docs/rag.md).
+
+---
+
 ## Repository Structure
 
 ```
@@ -304,6 +333,7 @@ The `/mcp` endpoint accepts JSON-RPC 2.0 requests with these methods:
 - `list_products`: Get all products (no parameters)
 - `search_products`: Filter by `colors`, `city`, `min_price`, `max_price`
 - `semantic_product_search`: Search by natural language `query` and optional `top_k`
+- `rag_query`: Conversational query with context retrieval
 
 ### Frontend (Next.js Host)
 
@@ -415,6 +445,7 @@ poetry run uvicorn main:app --reload
 | **Google Gemini** | 2.0 Flash | Function calling and natural language understanding |
 | **OpenAI Whisper** | whisper-1 | Speech-to-text transcription |
 | **OpenAI Embeddings** | text-embedding-ada-002 | Vector embeddings for semantic search |
+| **OpenAI GPT** | gpt-3.5-turbo | Conversational AI and RAG |
 
 ### Protocols & Standards
 | Protocol | Purpose |

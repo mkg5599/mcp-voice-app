@@ -237,3 +237,11 @@ export async function invokeTool<T = unknown>(
   }
   return body.result as T;
 }
+
+/* ---------- RAG Support ---------- */
+export async function invokeRag(query: string, contextSize?: number): Promise<unknown> {
+  return invokeTool("rag_query", { 
+    query, 
+    context_size: contextSize || 5 
+  });
+}

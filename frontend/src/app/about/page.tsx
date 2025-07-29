@@ -21,15 +21,15 @@ export default function AboutPage() {
                         Agentic Product Catalog
                     </h1>
                     <p className="text-2xl text-gray-700 mb-4">
-                        Voice + Natural Language Product Search
+                        Voice + Natural Language Product Search + AI Chat Assistant
                     </p>
                     <p className="text-lg text-gray-600 max-w-4xl mx-auto">
                         Powered by{" "}
                         <span className="font-semibold text-blue-600">Gemini 2.0 Flash</span>,{" "}
-                        <span className="font-semibold text-green-600">OpenAI Whisper</span>,{" "}
+                        <span className="font-semibold text-green-600">OpenAI Whisper & GPT</span>,{" "}
                         <span className="font-semibold text-purple-600">FastAPI + In-Memory Vector Store</span>,{" "}
                         <span className="font-semibold text-orange-600">Model Context Protocol</span>, and{" "}
-                        <span className="font-semibold text-red-600">OpenAI Embeddings</span>
+                        <span className="font-semibold text-red-600">RAG (Retrieval-Augmented Generation)</span>
                     </p>
                 </header>
 
@@ -81,7 +81,7 @@ export default function AboutPage() {
                                     <span className="text-white font-bold text-lg">4</span>
                                 </div>
                                 <h3 className="font-semibold text-orange-700">FastAPI Backend</h3>
-                                <p className="text-sm text-gray-600 text-center">MCP Tool Server + In-Memory Vector Search</p>
+                                <p className="text-sm text-gray-600 text-center">MCP Tool Server + Vector Search + RAG</p>
                             </div>
                         </div>
                     </div>
@@ -131,11 +131,11 @@ export default function AboutPage() {
                         </div>
                         <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
                             <h3 className="text-xl font-semibold text-red-600 mb-3">
-                                🧠 Smart Tool Selection
+                                🧠 RAG-Powered AI Assistant
                             </h3>
                             <p className="text-gray-600">
-                                Gemini automatically chooses between structured filtering, semantic search,
-                                or product listing based on your query intent.
+                                Conversational AI assistant combining semantic search with GPT models
+                                for natural language product recommendations and advice.
                             </p>
                         </div>
                         <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
@@ -155,7 +155,7 @@ export default function AboutPage() {
                     <h2 className="text-3xl font-bold text-center text-gray-800 mb-8">
                         Available MCP Tools
                     </h2>
-                    <div className="grid md:grid-cols-3 gap-6">
+                    <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
                         <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-blue-500">
                             <h3 className="text-xl font-semibold text-blue-600 mb-3">
                                 📦 list_products
@@ -187,6 +187,74 @@ export default function AboutPage() {
                             </p>
                             <div className="text-sm text-gray-500">
                                 <strong>Triggers:</strong> &quot;comfortable hoodies&quot;, &quot;warm winter clothing&quot;
+                            </div>
+                        </div>
+                        <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-red-500">
+                            <h3 className="text-xl font-semibold text-red-600 mb-3">
+                                💬 rag_query
+                            </h3>
+                            <p className="text-gray-600 mb-3">
+                                AI-powered conversational assistant with product recommendations and explanations.
+                            </p>
+                            <div className="text-sm text-gray-500">
+                                <strong>Triggers:</strong> &quot;I need help choosing&quot;, &quot;recommend something&quot;
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                {/* RAG vs Search Comparison */}
+                <section className="mb-16">
+                    <h2 className="text-3xl font-bold text-center text-gray-800 mb-8">
+                        RAG vs Semantic Search
+                    </h2>
+                    <div className="grid md:grid-cols-2 gap-8">
+                        <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-purple-500">
+                            <h3 className="text-xl font-semibold text-purple-600 mb-4">
+                                🔍 Semantic Search
+                            </h3>
+                            <div className="space-y-3">
+                                <div>
+                                    <h4 className="font-semibold text-gray-700 mb-1">Best For:</h4>
+                                    <ul className="text-sm text-gray-600 list-disc list-inside space-y-1">
+                                        <li>Direct product discovery</li>
+                                        <li>Fast browsing experience</li>
+                                        <li>Simple similarity matching</li>
+                                        <li>Cost-sensitive applications</li>
+                                    </ul>
+                                </div>
+                                <div>
+                                    <h4 className="font-semibold text-gray-700 mb-1">Response:</h4>
+                                    <p className="text-sm text-gray-600">Returns ranked product list with similarity scores</p>
+                                </div>
+                                <div>
+                                    <h4 className="font-semibold text-gray-700 mb-1">Speed:</h4>
+                                    <p className="text-sm text-green-600 font-semibold">~50ms</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-red-500">
+                            <h3 className="text-xl font-semibold text-red-600 mb-4">
+                                💬 RAG Assistant
+                            </h3>
+                            <div className="space-y-3">
+                                <div>
+                                    <h4 className="font-semibold text-gray-700 mb-1">Best For:</h4>
+                                    <ul className="text-sm text-gray-600 list-disc list-inside space-y-1">
+                                        <li>Conversational experience</li>
+                                        <li>Complex queries requiring reasoning</li>
+                                        <li>Personalized recommendations</li>
+                                        <li>Customer support scenarios</li>
+                                    </ul>
+                                </div>
+                                <div>
+                                    <h4 className="font-semibold text-gray-700 mb-1">Response:</h4>
+                                    <p className="text-sm text-gray-600">AI-generated explanations with product context</p>
+                                </div>
+                                <div>
+                                    <h4 className="font-semibold text-gray-700 mb-1">Speed:</h4>
+                                    <p className="text-sm text-orange-600 font-semibold">~1-3s</p>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -234,6 +302,14 @@ export default function AboutPage() {
                                     <span className="text-purple-600 text-sm">/products/semantic-search</span>
                                 </li>
                                 <li className="flex items-center gap-2">
+                                    <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded font-mono">POST</span>
+                                    <span className="text-red-600 text-sm">/products/rag</span>
+                                </li>
+                                <li className="flex items-center gap-2">
+                                    <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded font-mono">POST</span>
+                                    <span className="text-green-600 text-sm">/mcp (JSON-RPC 2.0)</span>
+                                </li>
+                                <li className="flex items-center gap-2">
                                     <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded font-mono">GET</span>
                                     <a 
                                         href={`${process.env.BACKEND_INTERNAL_URL}/docs`}
@@ -270,10 +346,14 @@ export default function AboutPage() {
                                     <span className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded font-mono">POST</span>
                                     <span className="text-orange-600 text-sm">/api/transcribe (Whisper)</span>
                                 </li>
+                                <li className="flex items-center gap-2">
+                                    <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded font-mono">POST</span>
+                                    <span className="text-red-600 text-sm">/api/rag (RAG Proxy)</span>
+                                </li>
                             </ul>
                             <div className="mt-4 p-3 bg-gray-50 rounded text-sm text-gray-600">
                                 <strong>Note:</strong> Frontend API routes are internal serverless functions
-                                that handle LLM orchestration and speech transcription.
+                                that handle LLM orchestration, speech transcription, and RAG proxy.
                             </div>
                         </div>
                     </div>
@@ -319,7 +399,7 @@ export default function AboutPage() {
                                     <h4 className="font-semibold text-gray-800 mb-1">Gemini Function Calling</h4>
                                     <p className="text-gray-600">
                                         Gemini 2.0 Flash analyzes query intent and automatically selects the best tool:
-                                        structured filtering, semantic search, or product listing via{" "}
+                                        structured filtering, semantic search, RAG conversation, or product listing via{" "}
                                         <code className="bg-gray-100 px-1 rounded">/api/chat</code>.
                                     </p>
                                 </div>
@@ -334,7 +414,7 @@ export default function AboutPage() {
                                         Backend receives JSON-RPC 2.0 request at{" "}
                                         <code className="bg-gray-100 px-1 rounded">/mcp</code> and executes
                                         the chosen function: attribute filtering, in-memory vector search,
-                                        or simple listing.
+                                        RAG conversation, or simple listing.
                                     </p>
                                 </div>
                             </li>
@@ -347,7 +427,8 @@ export default function AboutPage() {
                                     <p className="text-gray-600">
                                         Frontend sends tool results back to Gemini for natural language
                                         summarization, then displays products with similarity scores,
-                                        tool indicators, and rich metadata.
+                                        tool indicators, and rich metadata. RAG responses include AI-generated
+                                        explanations alongside relevant products.
                                     </p>
                                 </div>
                             </li>
@@ -403,7 +484,7 @@ export default function AboutPage() {
                         <h3 className="text-xl font-semibold text-purple-600 mb-4 text-center">
                             Backend (MCP Tool Server)
                         </h3>
-                        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-4">
                             <div className="bg-white rounded-lg shadow-md p-4 text-center">
                                 <div className="w-12 h-12 bg-green-600 rounded-full flex items-center justify-center mx-auto mb-2">
                                     <span className="text-white font-bold">⚡</span>
@@ -432,6 +513,13 @@ export default function AboutPage() {
                                 <h4 className="font-semibold text-orange-600">In-Memory Store</h4>
                                 <p className="text-xs text-gray-600">Pure Python Vector Search</p>
                             </div>
+                            <div className="bg-white rounded-lg shadow-md p-4 text-center">
+                                <div className="w-12 h-12 bg-red-500 rounded-full flex items-center justify-center mx-auto mb-2">
+                                    <span className="text-white font-bold">💬</span>
+                                </div>
+                                <h4 className="font-semibold text-red-600">RAG System</h4>
+                                <p className="text-xs text-gray-600">OpenAI GPT + Vector Context</p>
+                            </div>
                         </div>
                     </div>
 
@@ -440,7 +528,7 @@ export default function AboutPage() {
                         <h3 className="text-xl font-semibold text-orange-600 mb-4 text-center">
                             AI & ML Services
                         </h3>
-                        <div className="grid md:grid-cols-3 gap-4">
+                        <div className="grid md:grid-cols-4 gap-4">
                             <div className="bg-white rounded-lg shadow-md p-4 text-center">
                                 <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-2">
                                     <span className="text-white font-bold">🎤</span>
@@ -460,7 +548,14 @@ export default function AboutPage() {
                                     <span className="text-white font-bold">🤖</span>
                                 </div>
                                 <h4 className="font-semibold text-purple-600">Google Gemini</h4>
-                                <p className="text-xs text-gray-600">2.0 Flash</p>
+                                <p className="text-xs text-gray-600">2.0 Flash Function Calling</p>
+                            </div>
+                            <div className="bg-white rounded-lg shadow-md p-4 text-center">
+                                <div className="w-12 h-12 bg-red-500 rounded-full flex items-center justify-center mx-auto mb-2">
+                                    <span className="text-white font-bold">💬</span>
+                                </div>
+                                <h4 className="font-semibold text-red-600">OpenAI GPT</h4>
+                                <p className="text-xs text-gray-600">gpt-3.5-turbo RAG Generation</p>
                             </div>
                         </div>
                     </div>
@@ -508,16 +603,21 @@ export default function AboutPage() {
                     <h2 className="text-3xl font-bold text-center text-gray-800 mb-8">
                         Performance Metrics
                     </h2>
-                    <div className="grid md:grid-cols-3 gap-6">
+                    <div className="grid md:grid-cols-4 gap-6">
                         <div className="bg-white rounded-lg shadow-md p-6 text-center">
                             <div className="text-3xl font-bold text-blue-600 mb-2">~50ms</div>
-                            <h3 className="text-lg font-semibold text-gray-800 mb-2">In-Memory Search</h3>
+                            <h3 className="text-lg font-semibold text-gray-800 mb-2">Vector Search</h3>
                             <p className="text-sm text-gray-600">Pure Python cosine similarity search response time</p>
                         </div>
                         <div className="bg-white rounded-lg shadow-md p-6 text-center">
                             <div className="text-3xl font-bold text-green-600 mb-2">~1-3s</div>
                             <h3 className="text-lg font-semibold text-gray-800 mb-2">Voice Transcription</h3>
                             <p className="text-sm text-gray-600">OpenAI Whisper speech-to-text processing</p>
+                        </div>
+                        <div className="bg-white rounded-lg shadow-md p-6 text-center">
+                            <div className="text-3xl font-bold text-red-600 mb-2">~1-3s</div>
+                            <h3 className="text-lg font-semibold text-gray-800 mb-2">RAG Response</h3>
+                            <p className="text-sm text-gray-600">End-to-end retrieval + generation time</p>
                         </div>
                         <div className="bg-white rounded-lg shadow-md p-6 text-center">
                             <div className="text-3xl font-bold text-purple-600 mb-2">~25MB</div>
@@ -527,10 +627,49 @@ export default function AboutPage() {
                     </div>
                 </section>
 
+                {/* Use Cases */}
+                <section className="mb-16">
+                    <h2 className="text-3xl font-bold text-center text-gray-800 mb-8">
+                        Use Cases & Examples
+                    </h2>
+                    <div className="grid md:grid-cols-2 gap-8">
+                        <div className="bg-white rounded-lg shadow-md p-6">
+                            <h3 className="text-xl font-semibold text-blue-600 mb-4">
+                                🔍 Quick Product Search
+                            </h3>
+                            <div className="space-y-3">
+                                <div className="p-3 bg-gray-50 rounded">
+                                    <p className="text-sm font-semibold text-gray-700">Query:</p>
+                                    <p className="text-sm text-gray-600">&quot;Show me red hoodies under $40&quot;</p>
+                                </div>
+                                <div className="p-3 bg-blue-50 rounded">
+                                    <p className="text-sm font-semibold text-blue-700">Response:</p>
+                                    <p className="text-sm text-blue-600">Filtered product list with exact matches</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="bg-white rounded-lg shadow-md p-6">
+                            <h3 className="text-xl font-semibold text-red-600 mb-4">
+                                💬 Conversational Assistance
+                            </h3>
+                            <div className="space-y-3">
+                                <div className="p-3 bg-gray-50 rounded">
+                                    <p className="text-sm font-semibold text-gray-700">Query:</p>
+                                    <p className="text-sm text-gray-600">&quot;I need something comfortable for weekend casual wear&quot;</p>
+                                </div>
+                                <div className="p-3 bg-red-50 rounded">
+                                    <p className="text-sm font-semibold text-red-700">Response:</p>
+                                    <p className="text-sm text-red-600">AI-generated recommendations with explanations</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
                 {/* Footer */}
                 <footer className="text-center pt-8 border-t border-gray-200">
                     <p className="text-gray-600 mb-4">
-                        Built with ❤️ using Model Context Protocol principles
+                        Built with ❤️ by Manoj using Model Context Protocol principles + RAG technology
                     </p>
                     <div className="flex justify-center space-x-4">
                         <a 
@@ -549,6 +688,12 @@ export default function AboutPage() {
                         >
                             API Documentation
                         </a>
+                        <Link 
+                            href="/rag" 
+                            className="text-red-600 hover:underline"
+                        >
+                            Try AI Chat Assistant
+                        </Link>
                     </div>
                 </footer>
             </div>
