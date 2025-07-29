@@ -11,8 +11,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from langchain_openai import OpenAIEmbeddings
-from langchain_community.vectorstores import Chroma
-from langchain.schema import Document
 import chromadb
 
 # Disable ChromaDB telemetry to avoid warning messages
@@ -23,7 +21,6 @@ load_dotenv()
 BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
 PRODUCTS_JSON_PATH = os.path.join(BACKEND_DIR, "data", "products.json")
 PROMPTS_YAML_PATH = os.path.join(BACKEND_DIR, "prompts.yml")
-CHROMA_DB_PATH = os.path.join(BACKEND_DIR, ".chromadb")
 
 # ----- Load config (single source) -----
 with open(PROMPTS_YAML_PATH, "r", encoding="utf-8") as f:
@@ -38,14 +35,15 @@ ALLOWED_ORIGINS = os.getenv(
 ).split(",")
 
 # ----- Global variables for vector store -----
-vector_store: Optional[Chroma] = None
+chroma_client = None
+collection = None
 embeddings: Optional[OpenAIEmbeddings] = None
 
 # ----- Lifespan event for vector store initialization -----
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    await initialize_vector_store()
+    await initialize_chroma_client()
     yield
     # Shutdown
     pass
@@ -75,30 +73,105 @@ def filter_metadata_for_chroma(metadata: Dict[str, Any]) -> Dict[str, Any]:
             filtered[key] = str(value)
     return filtered
 
-async def initialize_vector_store():
-    """Initialize the vector store with product embeddings."""
-    global vector_store, embeddings
+async def initialize_chroma_client():
+    """Initialize the ChromaDB Cloud client and collection with product embeddings."""
+    global chroma_client, collection, embeddings
     
     try:
+        # Get ChromaDB configuration from environment
+        chroma_api_key = os.getenv("CHROMA_API_KEY")
+        chroma_tenant = os.getenv("CHROMA_TENANT", "33851047-d464-413f-89b0-1540fb4798bb")
+        chroma_database = os.getenv("CHROMA_DATABASE", "agentic-product-db")
+        
+        if not chroma_api_key:
+            print("Warning: CHROMA_API_KEY not found. Vector search will not work.")
+            return
+            
         # Initialize OpenAI embeddings
         openai_api_key = os.getenv("OPENAI_API_KEY")
         if not openai_api_key:
             print("Warning: OPENAI_API_KEY not found. Semantic search will not work.")
             return
             
+        print("Initializing ChromaDB Cloud client...")
+        
+        # Create ChromaDB Cloud client
+        chroma_client = chromadb.CloudClient(
+            api_key=chroma_api_key,
+            tenant=chroma_tenant,
+            database=chroma_database
+        )
+        
+        # Test connection
+        try:
+            chroma_client.heartbeat()
+            print(f"Successfully connected to ChromaDB Cloud (tenant: {chroma_tenant}, database: {chroma_database})")
+        except Exception as e:
+            print(f"Failed to connect to ChromaDB Cloud: {e}")
+            chroma_client = None
+            return
+        
         print("Initializing OpenAI embeddings...")
         embeddings = OpenAIEmbeddings(
             api_key=openai_api_key,
             model="text-embedding-ada-002"
         )
         
+        # Get or create collection
+        collection_name = "mcp_products"
+        try:
+            collection = chroma_client.get_collection(name=collection_name)
+            print(f"Found existing collection '{collection_name}'")
+            
+            # Check if collection has documents
+            count = collection.count()
+            print(f"Collection has {count} documents")
+            
+            if count == 0:
+                print("Collection is empty, populating with products...")
+                await populate_collection()
+            else:
+                print("Collection already populated")
+                
+        except Exception as e:
+            print(f"Collection '{collection_name}' not found, creating new one...")
+            try:
+                collection = chroma_client.create_collection(
+                    name=collection_name,
+                    metadata={"description": "MCP Product Catalog for semantic search"}
+                )
+                await populate_collection()
+            except Exception as create_error:
+                print(f"Failed to create collection: {create_error}")
+                collection = None
+        
+    except Exception as e:
+        print(f"Error initializing ChromaDB Cloud client: {e}")
+        import traceback
+        traceback.print_exc()
+        chroma_client = None
+        collection = None
+
+async def populate_collection():
+    """Populate the ChromaDB collection with product embeddings."""
+    global collection, embeddings
+    
+    if not collection or not embeddings:
+        print("Collection or embeddings not initialized")
+        return
+        
+    try:
         # Load products
         print("Loading products...")
         products = load_products()
         print(f"Loaded {len(products)} products")
         
-        # Create documents for embedding
+        # Prepare data for ChromaDB
         documents = []
+        metadatas = []
+        ids = []
+        
+        print("Creating embeddings and preparing data...")
         for product in products:
             # Combine name, description, tags, and city for rich context
             content_parts = [
@@ -112,7 +185,6 @@ async def initialize_vector_store():
             
             # Create metadata that's compatible with ChromaDB
             metadata = {
-                "id": str(product["id"]),  # Ensure ID is string
                 "name": str(product["name"]),
                 "price": float(product.get("price", 0)),
                 "city": str(product.get("city", "")),
@@ -124,36 +196,39 @@ async def initialize_vector_store():
             # Filter metadata to ensure only supported types
             filtered_metadata = filter_metadata_for_chroma(metadata)
             
-            doc = Document(
-                page_content=content,
-                metadata=filtered_metadata
+            documents.append(content)
+            metadatas.append(filtered_metadata)
+            ids.append(str(product["id"]))
+        
+        # Generate embeddings in batches to avoid rate limits
+        print("Generating embeddings...")
+        batch_size = 10  # Process in smaller batches
+        embeddings_list = []
+        
+        for i in range(0, len(documents), batch_size):
+            batch_docs = documents[i:i + batch_size]
+            batch_embeddings = embeddings.embed_documents(batch_docs)
+            embeddings_list.extend(batch_embeddings)
+            print(f"Generated embeddings for batch {i//batch_size + 1}/{(len(documents) + batch_size - 1)//batch_size}")
+        
+        # Add to collection in batches
+        print("Adding documents to ChromaDB collection...")
+        for i in range(0, len(documents), batch_size):
+            end_idx = min(i + batch_size, len(documents))
+            collection.add(
+                documents=documents[i:end_idx],
+                metadatas=metadatas[i:end_idx],
+                ids=ids[i:end_idx],
+                embeddings=embeddings_list[i:end_idx]
             )
-            documents.append(doc)
+            print(f"Added batch {i//batch_size + 1}/{(len(documents) + batch_size - 1)//batch_size}")
         
-        print("Creating vector store...")
-        
-        # Create ChromaDB client with telemetry disabled
-        client_settings = chromadb.config.Settings(
-            anonymized_telemetry=False,
-            allow_reset=True
-        )
-        
-        # Initialize Chroma vector store with explicit client settings
-        vector_store = Chroma.from_documents(
-            documents=documents,
-            embedding=embeddings,
-            persist_directory=CHROMA_DB_PATH,
-            collection_name="products",
-            client_settings=client_settings
-        )
-        
-        print(f"Vector store initialized with {len(documents)} products")
+        print(f"Successfully populated collection with {len(documents)} products")
         
     except Exception as e:
-        print(f"Error initializing vector store: {e}")
+        print(f"Error populating collection: {e}")
         import traceback
         traceback.print_exc()
-        vector_store = None
 
 # ----- Root route -----
 @app.get("/", summary="Service Index", tags=["meta"])
@@ -164,6 +239,7 @@ def index():
     return {
         "message": "Welcome to the MCP Product Tool Server (FastAPI)",
         "purpose": "Expose product catalog functions as MCP tools (list_products, search_products, semantic_product_search).",
+        "vector_store": "ChromaDB Cloud" if chroma_client else "Not Available",
         "mcp": {
             "discovery_endpoint": "/.well-known/mcp.json",
             "json_rpc_endpoint": "/mcp",
@@ -177,7 +253,8 @@ def index():
         },
         "notes": [
             "Transcription & LLM orchestration are handled by host(s) (e.g., Next.js).",
-            "This server is host-agnostic and reusable by multiple MCP hosts."
+            "This server is host-agnostic and reusable by multiple MCP hosts.",
+            "Using ChromaDB Cloud service for vector storage."
         ],
         "docs": {
             "openapi_json": "/openapi.json",
@@ -260,9 +337,9 @@ def search_products_impl(params: ProductSearch) -> List[Dict[str, Any]]:
     return results
 
 def semantic_product_search_impl(params: SemanticSearch) -> List[Dict[str, Any]]:
-    """Perform semantic search using vector similarity."""
-    if not vector_store:
-        print("Vector store not initialized. Semantic search unavailable.")
+    """Perform semantic search using ChromaDB Cloud service."""
+    if not collection or not embeddings:
+        print("ChromaDB collection not initialized. Semantic search unavailable.")
         # Fall back to simple text search
         return fallback_text_search(params.query, params.top_k or 5)
     
@@ -270,37 +347,43 @@ def semantic_product_search_impl(params: SemanticSearch) -> List[Dict[str, Any]]
     try:
         print(f"Performing semantic search for: '{params.query}'")
         
+        # Generate query embedding
+        query_embedding = embeddings.embed_query(params.query)
+        
         # Perform similarity search
-        docs = vector_store.similarity_search_with_score(
-            params.query, 
-            k=params.top_k or 5
+        results = collection.query(
+            query_embeddings=[query_embedding],
+            n_results=params.top_k or 5,
+            include=["documents", "metadatas", "distances"]
         )
         
-        print(f"Found {len(docs)} similar documents")
+        print(f"Found {len(results['ids'][0])} similar documents")
         
         # Get full product data for each result
         products = load_products()
         product_map = {str(p["id"]): p for p in products}  # Ensure string keys
         
-        results = []
-        for doc, score in docs:
-            product_id = str(doc.metadata["id"])
+        search_results = []
+        for i, product_id in enumerate(results['ids'][0]):
             if product_id in product_map:
                 product = product_map[product_id].copy()
                 # Convert distance to similarity (lower distance = higher similarity)
-                # ChromaDB uses cosine distance, so we need to convert it
-                product["similarity_score"] = max(0, 1.0 - float(score))
-                results.append(product)
+                # ChromaDB returns cosine distance, convert to similarity score
+                distance = results['distances'][0][i]
+                similarity = max(0, 1.0 - distance)
+                product["similarity_score"] = float(similarity)
+                search_results.append(product)
         
         duration_ms = int((time.time() - t0) * 1000)
         print(json.dumps({
             "evt": "semantic_search",
             "query": params.query,
-            "result_count": len(results),
-            "duration_ms": duration_ms
+            "result_count": len(search_results),
+            "duration_ms": duration_ms,
+            "vector_store": "chromadb_cloud"
         }))
         
-        return results
+        return search_results
         
     except Exception as e:
         duration_ms = int((time.time() - t0) * 1000)
@@ -311,7 +394,8 @@ def semantic_product_search_impl(params: SemanticSearch) -> List[Dict[str, Any]]
             "evt": "semantic_search_error",
             "query": params.query,
             "duration_ms": duration_ms,
-            "error": str(e)
+            "error": str(e),
+            "vector_store": "chromadb_cloud"
         }))
         # Fall back to simple text search
         return fallback_text_search(params.query, params.top_k or 5)
@@ -375,7 +459,7 @@ def mcp_endpoint(req: JsonRpcRequest):
     Supported methods:
     - list_products: Get all products
     - search_products: Filter products by criteria
-    - semantic_product_search: Natural language product search
+    - semantic_product_search: Natural language product search via ChromaDB Cloud
     """
     if req.jsonrpc != "2.0":
         return JSONResponse(
@@ -412,7 +496,8 @@ def mcp_endpoint(req: JsonRpcRequest):
             "method": req.method,
             "params": req.params,
             "result_count": len(result) if isinstance(result, list) else None,
-            "duration_ms": duration_ms
+            "duration_ms": duration_ms,
+            "vector_store": "chromadb_cloud" if collection else "fallback"
         }))
         return {"jsonrpc": "2.0", "result": result, "id": req.id}
     except Exception as exc:  # noqa: BLE001
@@ -455,9 +540,11 @@ def healthz():
     """Health check endpoint."""
     return {
         "ok": True, 
-        "vector_store_ready": vector_store is not None,
+        "vector_store_ready": collection is not None,
+        "chroma_client_ready": chroma_client is not None,
         "products_loaded": _products_cache is not None,
-        "available_methods": ["list_products", "search_products", "semantic_product_search"]
+        "available_methods": ["list_products", "search_products", "semantic_product_search"],
+        "vector_store_type": "chromadb_cloud" if collection else "unavailable"
     }
 
 # ----- MCP Discovery -----

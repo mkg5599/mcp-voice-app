@@ -11,5 +11,15 @@
       "src": "/(.*)",
       "dest": "main.py"
     }
-  ]
+  ],
+  "functions": {
+    "backend/main.py": {
+      "excludeFiles": [
+        "**/.chromadb/**",
+        "**/tests/**",
+        "**/__pycache__/**",
+        "**/.pytest_cache/**"
+      ]
+    }
+  }
 }
