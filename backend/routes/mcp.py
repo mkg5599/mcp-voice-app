@@ -1,7 +1,7 @@
 """MCP JSON-RPC endpoints."""
 import json
 import time
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from models.requests import JsonRpcRequest, ProductSearch, SemanticSearch
 from services.product_service import ProductService
@@ -18,6 +18,16 @@ def init_mcp_routes(vector_store: InMemoryVectorStore):
     """Initialize MCP routes with dependencies."""
     global product_service
     product_service = ProductService(vector_store)
+    print(f"MCP routes initialized with product_service: {product_service is not None}")
+
+def get_product_service() -> ProductService:
+    """Get the product service instance with proper error handling."""
+    if product_service is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Product service not initialized. Application startup may have failed."
+        )
+    return product_service
 
 @router.post("/mcp")
 async def mcp_endpoint(req: JsonRpcRequest):
@@ -39,16 +49,26 @@ async def mcp_endpoint(req: JsonRpcRequest):
             status_code=400,
         )
 
-    # Define async routing
+    # Define async routing with proper service validation
     async def route_method(method: str, params: dict):
-        if method == "list_products":
-            return product_service.list_products()
-        elif method == "search_products":
-            return product_service.search_products(ProductSearch(**(params or {})))
-        elif method == "semantic_product_search":
-            return await product_service.semantic_search(SemanticSearch(**(params or {})))
-        else:
-            raise ValueError(f"Method '{method}' not found")
+        try:
+            service = get_product_service()
+            
+            if method == "list_products":
+                return service.list_products()
+            elif method == "search_products":
+                return service.search_products(ProductSearch(**(params or {})))
+            elif method == "semantic_product_search":
+                return await service.semantic_search(SemanticSearch(**(params or {})))
+            else:
+                raise ValueError(f"Method '{method}' not found")
+        except HTTPException as e:
+            # Re-raise HTTP exceptions (service initialization errors)
+            raise e
+        except Exception as e:
+            # Handle other service errors
+            print(f"Service method error for {method}: {e}")
+            raise e
 
     valid_methods = ["list_products", "search_products", "semantic_product_search"]
     if req.method not in valid_methods:
@@ -66,7 +86,13 @@ async def mcp_endpoint(req: JsonRpcRequest):
         result = await route_method(req.method, req.params)
         duration_ms = int((time.time() - t0) * 1000)
         
-        vector_available = embedding_service.is_ready() and product_service.vector_store.count() > 0
+        # Safe check for vector store availability
+        vector_available = False
+        try:
+            service = get_product_service()
+            vector_available = embedding_service.is_ready() and service.vector_store.count() > 0
+        except:
+            vector_available = False
         
         print(json.dumps({
             "evt": "json_rpc_request",
@@ -76,12 +102,39 @@ async def mcp_endpoint(req: JsonRpcRequest):
             "duration_ms": duration_ms,
             "vector_store": f"in_memory:{vector_available}",
             "deployment": "vercel" if IS_VERCEL else "local",
-            "bundle_optimized": True
+            "bundle_optimized": True,
+            "service_initialized": product_service is not None
         }))
         return {"jsonrpc": "2.0", "result": result, "id": req.id}
-    except Exception as exc:
+    
+    except HTTPException as http_exc:
+        # Handle service initialization errors
         duration_ms = int((time.time() - t0) * 1000)
-        print(f"JSON-RPC error: {exc}")
+        error_msg = f"Service initialization error: {http_exc.detail}"
+        print(f"JSON-RPC HTTP error: {error_msg}")
+        print(json.dumps({
+            "evt": "json_rpc_request_error",
+            "method": req.method,
+            "params": req.params,
+            "duration_ms": duration_ms,
+            "error": error_msg,
+            "error_type": "service_initialization",
+            "service_initialized": product_service is not None
+        }))
+        return JSONResponse(
+            {
+                "jsonrpc": "2.0",
+                "error": {"code": -32001, "message": error_msg},
+                "id": req.id,
+            },
+            status_code=500,
+        )
+    
+    except Exception as exc:
+        # Handle other errors
+        duration_ms = int((time.time() - t0) * 1000)
+        error_msg = str(exc)
+        print(f"JSON-RPC error: {error_msg}")
         import traceback
         traceback.print_exc()
         print(json.dumps({
@@ -89,12 +142,14 @@ async def mcp_endpoint(req: JsonRpcRequest):
             "method": req.method,
             "params": req.params,
             "duration_ms": duration_ms,
-            "error": str(exc)
+            "error": error_msg,
+            "error_type": "general",
+            "service_initialized": product_service is not None
         }))
         return JSONResponse(
             {
                 "jsonrpc": "2.0",
-                "error": {"code": -32000, "message": str(exc)},
+                "error": {"code": -32000, "message": error_msg},
                 "id": req.id,
             },
             status_code=500,
@@ -116,3 +171,14 @@ def mcp_options():
 def get_mcp():
     """MCP discovery endpoint - returns available tools and their schemas."""
     return PROMPTS_CONFIG["mcp_discovery"]
+
+# Health check endpoint for MCP service
+@router.get("/mcp/health")
+def mcp_health():
+    """Health check specifically for MCP service initialization."""
+    return {
+        "service_initialized": product_service is not None,
+        "embedding_service_ready": embedding_service.is_ready(),
+        "vector_store_count": product_service.vector_store.count() if product_service else 0,
+        "available_methods": ["list_products", "search_products", "semantic_product_search"]
+    }
