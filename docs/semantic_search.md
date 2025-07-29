@@ -1,15 +1,15 @@
-# Semantic Search Documentation
+# In-Memory Vector Search Documentation
 
 ## Overview
 
-The semantic search feature enables natural language queries over the product catalog using vector embeddings and similarity search. This provides more intuitive product discovery compared to traditional keyword-based filtering.
+The semantic search feature enables natural language queries over the product catalog using vector embeddings and in-memory similarity search. This provides more intuitive product discovery compared to traditional keyword-based filtering while maintaining a lightweight, Vercel-deployable architecture.
 
 ## Architecture
 
 1. **Embedding Generation**: Product data (name, description, tags, city) is converted to vector embeddings using OpenAI's `text-embedding-ada-002` model
-2. **Vector Storage**: Embeddings are stored in ChromaDB for efficient similarity search
+2. **In-Memory Storage**: Embeddings are stored in Python dictionaries for fast access
 3. **Query Processing**: User queries are embedded and compared against product vectors
-4. **Similarity Ranking**: Results are ranked by cosine similarity score
+4. **Similarity Ranking**: Results are ranked by cosine similarity score using pure Python implementation
 
 ## Setup
 
@@ -27,11 +27,11 @@ poetry install
 
 ### Initialization
 
-The vector store is automatically initialized on FastAPI startup:
+The in-memory vector store is automatically initialized on FastAPI startup:
 
 1. Loads products from `data/products.json`
-2. Creates embeddings for each product
-3. Stores vectors in `.chromadb/` directory
+2. Creates embeddings for each product using OpenAI
+3. Stores vectors in memory for fast retrieval
 4. Makes semantic search available via API
 
 ## Usage
@@ -86,21 +86,44 @@ Content-Type: application/json
 
 To refresh the vector store after updating products:
 
-1. Delete the `.chromadb/` directory
-2. Restart the FastAPI server
-3. The vector store will rebuild automatically
+1. Restart the FastAPI server
+2. The vector store will rebuild automatically on startup
 
 ```bash
-rm -rf .chromadb
 poetry run uvicorn main:app --reload
 ```
 
 ## Performance Considerations
 
 - Initial embedding generation takes ~2-3 seconds for 15 products
-- Query response time: ~100-200ms
-- Vector store persists to disk for fast startup after first initialization
-- Consider implementing incremental updates for larger catalogs
+- Query response time: ~50ms (in-memory lookup)
+- Bundle size: ~25MB (perfect for Vercel deployment)
+- No external database required
+- Fast startup after embedding generation
+
+## Advantages of In-Memory Approach
+
+### Performance
+- **Ultra-fast queries**: No network calls to external vector DB
+- **Quick startup**: Embeddings generated once on startup
+- **Predictable latency**: No external service dependencies
+
+### Deployment
+- **Lightweight**: ~25MB total bundle size
+- **Vercel compatible**: Under 250MB serverless limit
+- **No infrastructure**: No vector database setup required
+- **Stateless**: Easy horizontal scaling
+
+### Development
+- **Simple debugging**: All vectors accessible in memory
+- **No external deps**: Fewer moving parts
+- **Cost effective**: Only OpenAI API calls for embeddings
+
+## Limitations
+
+- **Memory usage**: Scales linearly with product count
+- **Cold starts**: Embeddings regenerated on each restart
+- **No persistence**: Vectors lost on restart (acceptable for small catalogs)
 
 ## Troubleshooting
 
@@ -114,7 +137,20 @@ poetry run uvicorn main:app --reload
 - Include relevant tags for better context
 - Consider adjusting `top_k` parameter
 
-### Slow performance
+### Performance issues
 - Check OpenAI API rate limits
-- Monitor embedding generation time
-- Consider caching strategies for frequently searched terms
+- Monitor embedding generation time during startup
+- Consider caching strategies for very large catalogs
+
+## When to Consider External Vector DB
+
+For larger product catalogs (>1000 products), consider:
+- **ChromaDB**: For persistent storage and incremental updates
+- **Pinecone**: For managed vector search at scale
+- **Weaviate**: For hybrid search capabilities
+
+The current in-memory approach is optimal for:
+- **Small to medium catalogs** (<500 products)
+- **Serverless deployments** (Vercel, AWS Lambda)
+- **Development and prototyping**
+- **Cost-sensitive applications**

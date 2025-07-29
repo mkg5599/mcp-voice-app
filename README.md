@@ -6,12 +6,12 @@ An end-to-end **voice + natural language product search** application demonstrat
 * **FastAPI (Python)** as a **pure MCP Tool Server** exposing structured product functions and semantic search.
 * **Google Gemini 2.0 Flash (@google/genai)** for semantic interpretation + *automatic function calling*.
 * **OpenAI Whisper (via Next.js serverless route)** for speech-to-text transcription.
-* **Vector RAG Search** powered by LangChain + ChromaDB + OpenAI Embeddings for semantic product discovery.
+* **In-Memory Vector Search** powered by LangChain + OpenAI Embeddings with pure Python cosine similarity.
 * **JSON-RPC 2.0 over HTTP** (`/mcp`) for tool invocation.
 * **MCP-style discovery** via `/.well-known/mcp.json`.
 * **Docker Compose** for local multi-service orchestration.
 
-> This project shows how **Model Context Protocol principles** let you keep **domain tools** (product catalog functions) decoupled, while the **host** layers on voice input + LLM function calling. The backend is a reusable tool server with semantic search capabilities.
+> This project shows how **Model Context Protocol principles** let you keep **domain tools** (product catalog functions) decoupled, while the **host** layers on voice input + LLM function calling. The backend is a reusable tool server with lightweight semantic search capabilities.
 
 ---
 
@@ -23,7 +23,7 @@ An end-to-end **voice + natural language product search** application demonstrat
 4. [MCP Integration Details](#mcp-integration-details)  
 5. [Gemini Function Calling Flow](#gemini-function-calling-flow)  
 6. [Whisper Speech Transcription](#whisper-speech-transcription)  
-7. [Semantic Search & RAG](#semantic-search--rag)
+7. [In-Memory Vector Search](#in-memory-vector-search)
 8. [Repository Structure](#repository-structure)  
 9. [Environment Variables](#environment-variables)  
 10. [Local Development](#local-development)  
@@ -44,12 +44,12 @@ An end-to-end **voice + natural language product search** application demonstrat
 | Layer | Role | Technologies | Key Responsibility |
 |-------|------|--------------|--------------------|
 | **Host (UI)** | Accept user text / voice; orchestrate LLM + tools | Next.js, TypeScript, @google/genai, Whisper | Transcribe audio → text; negotiate Gemini function calls; render results |
-| **LLM** | Natural language understanding + tool selection | Gemini 2.0 Flash Exp | Decide whether to call a tool; summarize tool output |
-| **Tool Server** | Deterministic domain functions + semantic search | FastAPI + JSON-RPC façade + LangChain + ChromaDB | Provide `list_products`, `search_products`, `semantic_product_search` |
+| **LLM** | Natural language understanding + tool selection | Gemini 2.0 Flash | Decide whether to call a tool; summarize tool output |
+| **Tool Server** | Deterministic domain functions + semantic search | FastAPI + JSON-RPC façade + LangChain + In-Memory Vector Store | Provide `list_products`, `search_products`, `semantic_product_search` |
 | **MCP Discovery** | Tool metadata | `/.well-known/mcp.json` | Advertise schemas for dynamic functionDeclarations |
-| **Vector Store** | Semantic product embeddings | OpenAI Embeddings + ChromaDB | Enable natural language product discovery |
+| **Vector Store** | Semantic product embeddings | OpenAI Embeddings + In-Memory Python | Enable natural language product discovery |
 
-**Change vs earlier version:** The **backend no longer contains `/transcribe`**—speech belongs firmly to the host layer. **Added semantic search** with vector embeddings for natural language queries.
+**Change vs earlier version:** The **backend no longer contains `/transcribe`**—speech belongs firmly to the host layer. **Added lightweight semantic search** with OpenAI embeddings and pure Python similarity search.
 
 ---
 
@@ -73,24 +73,24 @@ Browser (React UI)
 Backend (FastAPI Tool Server)
    ├─ GET /products
    ├─ POST /products/search
-   ├─ POST /products/semantic-search  (NEW)
+   ├─ POST /products/semantic-search  (In-Memory Vector Search)
    ├─ POST /mcp  (JSON-RPC 2.0)
    ├─ GET /.well-known/mcp.json
-   ├─ /.chromadb/  (vector store)
    └─ GET /healthz
 ```
 
 **Vector Store Flow:**
 ```
-Startup → Load products.json → Generate embeddings → Store in ChromaDB
-Query → Embed user query → Similarity search → Return ranked products
+Startup → Load products.json → Generate embeddings → Store in-memory
+Query → Embed user query → Cosine similarity search → Return ranked products
 ```
 
-**Why remove backend transcription?**
+**Why use in-memory vector search?**
 
-* Keeps the **tool server reusable** by other agents without Whisper dependencies.
-* Reduces attack surface and secret sprawl—`OPENAI_API_KEY` exists only in host.
-* Clear separation of **pure data tools** vs **orchestration / AI enrichment**.
+* Keeps the **tool server lightweight** and Vercel-deployable under 250MB.
+* Reduces external dependencies and eliminates vector database setup.
+* Fast startup and query times with pure Python cosine similarity.
+* **Pure data tools** vs **orchestration / AI enrichment** separation.
 
 ---
 
@@ -104,7 +104,7 @@ Query → Embed user query → Similarity search → Return ranked products
 
 3. **First Gemini Call** (`mode=ANY`): Model may return answer or a `functionCall` (including semantic search).
 
-4. **Tool Invocation**: Host calls backend `/mcp` JSON-RPC to execute domain function or semantic search.
+4. **Tool Invocation**: Host calls backend `/mcp` JSON-RPC to execute domain function or in-memory semantic search.
 
 5. **Second Gemini Call** (`mode=NONE`): Host includes `functionResponse` so Gemini composes a natural language summary.
 
@@ -118,10 +118,10 @@ Query → Embed user query → Similarity search → Return ranked products
 |----------|----------------|
 | Backend `/.well-known/mcp.json` | Canonical tool schemas (now includes semantic search). |
 | Backend `/mcp` | JSON-RPC 2.0 payload dispatch. |
-| FastAPI functions | Implement deterministic business logic + vector search. |
+| FastAPI functions | Implement deterministic business logic + in-memory vector search. |
 | Frontend `mcpHost.ts` | Fetch & cache discovery, generate tool declarations. |
 | Frontend `/api/chat` | Two-phase Gemini function-calling orchestration. |
-| ChromaDB | Persistent vector storage for semantic search. |
+| In-Memory Store | Fast vector storage and similarity search. |
 
 > Additional hosts (CLI, Slack bot, etc.) can reuse the backend by replicating: **discover → supply tools → call JSON-RPC**.
 
@@ -156,26 +156,26 @@ Query → Embed user query → Similarity search → Return ranked products
 
 ---
 
-## Semantic Search & RAG
+## In-Memory Vector Search
 
 | Component | Technology | Purpose |
 |-----------|------------|---------|
 | **Embeddings** | OpenAI `text-embedding-ada-002` | Convert product data to vectors |
-| **Vector Store** | ChromaDB | Persistent similarity search |
-| **Framework** | LangChain | Vector store abstraction |
+| **Vector Store** | Pure Python in-memory | Fast similarity search with cosine similarity |
+| **Framework** | LangChain OpenAI | Embedding generation abstraction |
 | **Documents** | Product name + description + tags + city | Rich context for embeddings |
 
 **Features:**
 - **Natural Language Queries**: "comfortable black hoodie for streetwear"
 - **Similarity Scoring**: Results ranked by cosine similarity
-- **Persistent Storage**: Vector store survives restarts
-- **Fast Queries**: ~100-200ms response time
+- **Fast Performance**: ~50ms response time (in-memory)
+- **Lightweight**: ~25MB bundle size (Vercel compatible)
 
 **Example Query Flow:**
 ```
 User: "warm winter clothing"
 → Embed query with OpenAI
-→ ChromaDB similarity search  
+→ In-memory cosine similarity search  
 → Return products with scores
 → Gemini summarizes results
 ```
@@ -198,9 +198,8 @@ root/
 │  ├─ main.py            # FastAPI MCP tool server (products + semantic search)
 │  ├─ data/products.json # Enhanced product catalog with descriptions
 │  ├─ prompts.yml        # discovery schemas (includes semantic search)
-│  ├─ .chromadb/        # vector store (auto-generated)
 │  ├─ tests/            # unit tests including semantic search
-│  ├─ pyproject.toml    # includes LangChain + ChromaDB dependencies
+│  ├─ pyproject.toml    # includes LangChain + OpenAI dependencies
 ├─ docs/
 │  └─ semantic_search.md # semantic search documentation
 ├─ docker-compose.yml
@@ -228,7 +227,7 @@ root/
 ```bash
 cd backend
 poetry install
-# Vector store will auto-initialize on first startup
+# In-memory vector store will auto-initialize on first startup
 OPENAI_API_KEY=your_openai_key uvicorn main:app --reload --port 8000
 ```
 
@@ -266,10 +265,10 @@ docker compose up --build
 
 | Service | Notes |
 |---------|-------|
-| Backend (FastAPI) | Stateless; horizontally scalable; can be reused by many hosts. Includes vector store. |
+| Backend (FastAPI) | Stateless; horizontally scalable; can be reused by many hosts. Includes in-memory vector store. |
 | Frontend (Next.js) | Deployed to Vercel; provides `/api/chat` + `/api/transcribe`. |
 | Separation | Clean host/tool divide; easier migration to additional hosts. |
-| Vector Store | ChromaDB persists to disk; survives container restarts. |
+| Vector Store | In-memory vectors rebuild on startup; fast initialization. |
 
 ---
 
@@ -332,14 +331,14 @@ curl -X POST http://localhost:8000/mcp \
 1. Add Python function (e.g. `get_product_reviews`).
 2. Register in `/mcp` method mapping.
 3. Add schema entry to `prompts.yml` under `mcp_discovery.tools`.
-4. **For semantic search**: Update product descriptions and rebuild vector store.
+4. **For semantic search**: Update product descriptions and restart backend.
 5. Redeploy backend.
 6. Host auto-discovers new tool; prompt Gemini to use it.
 
 **Vector Store Refresh:**
 ```bash
-rm -rf backend/.chromadb
-# Restart backend to rebuild embeddings
+# Simply restart backend to rebuild in-memory embeddings
+poetry run uvicorn main:app --reload
 ```
 
 **Tip:** Provide clear, discriminative descriptions so the model selects the correct tool.
@@ -356,7 +355,7 @@ rm -rf backend/.chromadb
 | Large responses | Add pagination to `search_products` and semantic search. |
 | Rate abuse (transcribe) | Add simple rate limiting or auth token at host. |
 | Prompt injection via tool data | Sanitize product inputs before storing. |
-| Vector store access | Secure ChromaDB directory permissions. |
+| In-memory data access | Secure server access and environment variables. |
 | Embedding costs | Monitor OpenAI API usage for embedding generation. |
 
 ---
@@ -371,8 +370,8 @@ rm -rf backend/.chromadb
 | Case-sensitive city filter | Old backend version | Redeploy updated backend |
 | CORS errors | Origin mismatch | Update backend `ALLOWED_ORIGINS` |
 | `Vector store not initialized` | Missing `OPENAI_API_KEY` in backend | Set key in backend environment |
-| Poor semantic search results | Weak product descriptions | Enhance product data & rebuild vectors |
-| Slow semantic search | Large vector store | Consider pagination or result caching |
+| Poor semantic search results | Weak product descriptions | Enhance product data & restart backend |
+| Slow semantic search | Large vector store or inefficient similarity | Optimize in-memory search or add caching |
 | **405 Method Not Allowed on `/mcp`** | Incorrect HTTP method or CORS issue | Ensure POST method, check CORS headers |
 
 ---
@@ -396,9 +395,7 @@ rm -rf backend/.chromadb
 | **Python** | 3.13 | Runtime environment |
 | **Pydantic** | 2.x | Data validation and serialization |
 | **LangChain** | 0.2.x | Framework for LLM applications |
-| **LangChain Community** | 0.2.x | Community integrations and tools |
 | **LangChain OpenAI** | 0.1.x | OpenAI-specific LangChain components |
-| **ChromaDB** | 0.4.x | Vector database for embeddings |
 | **OpenAI Embeddings** | Via LangChain | Text embedding generation |
 | **PyYAML** | 6.x | Configuration file parsing |
 | **Python-dotenv** | 1.x | Environment variable management |
@@ -415,7 +412,7 @@ rm -rf backend/.chromadb
 ### AI & ML Services
 | Service | Model | Purpose |
 |---------|-------|---------|
-| **Google Gemini** | 2.0 Flash Exp | Function calling and natural language understanding |
+| **Google Gemini** | 2.0 Flash | Function calling and natural language understanding |
 | **OpenAI Whisper** | whisper-1 | Speech-to-text transcription |
 | **OpenAI Embeddings** | text-embedding-ada-002 | Vector embeddings for semantic search |
 
@@ -433,7 +430,7 @@ rm -rf backend/.chromadb
 
 | Area | Idea |
 |------|------|
-| ~~Retrieval~~ | ~~Add vector DB + semantic search tool.~~ ✅ **COMPLETED** |
+| ~~Retrieval~~ | ~~Add vector search tool.~~ ✅ **COMPLETED** |
 | Streaming | Use `generateContentStream` for progressive answers. |
 | Observability | Integrate OpenTelemetry traces. |
 | Auth | JWT or API keys for tool calls. |
@@ -443,7 +440,7 @@ rm -rf backend/.chromadb
 | Analytics | Persist tool call metrics dashboards. |
 | Advanced RAG | Add metadata filtering to semantic search. |
 | Hybrid Search | Combine keyword and semantic search results. |
-| Real-time Updates | Incremental vector store updates for new products. |
+| External Vector DB | Optional ChromaDB/Pinecone for larger datasets. |
 
 ---
 
@@ -468,4 +465,4 @@ MIT
 ---
 
 **Questions / Ideas?** Open an issue.  
-Enjoy building with **MCP + Gemini + Whisper + Vector Search** 🚀
+Enjoy building with **MCP + Gemini + Whisper + In-Memory Vector Search** 🚀

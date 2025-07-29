@@ -9,9 +9,6 @@ services:
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - ALLOWED_ORIGINS=http://localhost:3000,http://frontend:3000
-    volumes:
-      # Persist vector store across container restarts
-      - backend_vectorstore:/app/.chromadb
     networks:
       - mcpnet
     restart: unless-stopped

@@ -27,9 +27,9 @@ export default function AboutPage() {
                         Powered by{" "}
                         <span className="font-semibold text-blue-600">Gemini 2.0 Flash</span>,{" "}
                         <span className="font-semibold text-green-600">OpenAI Whisper</span>,{" "}
-                        <span className="font-semibold text-purple-600">FastAPI + ChromaDB</span>,{" "}
+                        <span className="font-semibold text-purple-600">FastAPI + In-Memory Vector Store</span>,{" "}
                         <span className="font-semibold text-orange-600">Model Context Protocol</span>, and{" "}
-                        <span className="font-semibold text-red-600">LangChain Vector Search</span>
+                        <span className="font-semibold text-red-600">OpenAI Embeddings</span>
                     </p>
                 </header>
 
@@ -81,7 +81,7 @@ export default function AboutPage() {
                                     <span className="text-white font-bold text-lg">4</span>
                                 </div>
                                 <h3 className="font-semibold text-orange-700">FastAPI Backend</h3>
-                                <p className="text-sm text-gray-600 text-center">MCP Tool Server + Vector Search</p>
+                                <p className="text-sm text-gray-600 text-center">MCP Tool Server + In-Memory Vector Search</p>
                             </div>
                         </div>
                     </div>
@@ -113,11 +113,11 @@ export default function AboutPage() {
                         </div>
                         <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
                             <h3 className="text-xl font-semibold text-purple-600 mb-3">
-                                🔍 Semantic Vector Search
+                                🔍 In-Memory Vector Search
                             </h3>
                             <p className="text-gray-600">
-                                AI-powered vector search using OpenAI embeddings and ChromaDB for natural language
-                                product discovery with similarity scoring.
+                                Fast in-memory semantic search using OpenAI embeddings with 
+                                cosine similarity for natural language product discovery.
                             </p>
                         </div>
                         <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
@@ -140,11 +140,11 @@ export default function AboutPage() {
                         </div>
                         <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
                             <h3 className="text-xl font-semibold text-indigo-600 mb-3">
-                                🐳 Production Ready
+                                🚀 Vercel Optimized
                             </h3>
                             <p className="text-gray-600">
-                                Docker Compose orchestration with persistent vector storage,
-                                CORS handling, and comprehensive error management.
+                                Lightweight ~25MB bundle with no external vector database,
+                                perfect for serverless deployment under 250MB limit.
                             </p>
                         </div>
                     </div>
@@ -183,7 +183,7 @@ export default function AboutPage() {
                                 🤖 semantic_product_search
                             </h3>
                             <p className="text-gray-600 mb-3">
-                                Vector similarity search for natural language queries with scoring.
+                                In-memory vector similarity search for natural language queries with scoring.
                             </p>
                             <div className="text-sm text-gray-500">
                                 <strong>Triggers:</strong> &quot;comfortable hoodies&quot;, &quot;warm winter clothing&quot;
@@ -206,7 +206,7 @@ export default function AboutPage() {
                                 <li className="flex items-center gap-2">
                                     <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded font-mono">GET</span>
                                     <a 
-                                        href={`http://localhost:8000/.well-known/mcp.json`}
+                                        href={`${process.env.BACKEND_INTERNAL_URL}/.well-known/mcp.json`}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="text-blue-600 hover:underline text-sm"
@@ -217,7 +217,7 @@ export default function AboutPage() {
                                 <li className="flex items-center gap-2">
                                     <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded font-mono">GET</span>
                                     <a 
-                                        href={`http://localhost:8000/products`}
+                                        href={`${process.env.BACKEND_INTERNAL_URL}/products`}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="text-blue-600 hover:underline text-sm"
@@ -236,7 +236,7 @@ export default function AboutPage() {
                                 <li className="flex items-center gap-2">
                                     <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded font-mono">GET</span>
                                     <a 
-                                        href={`http://localhost:8000/docs`}
+                                        href={`${process.env.BACKEND_INTERNAL_URL}/docs`}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="text-blue-600 hover:underline text-sm"
@@ -247,7 +247,7 @@ export default function AboutPage() {
                                 <li className="flex items-center gap-2">
                                     <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded font-mono">GET</span>
                                     <a 
-                                        href={`http://localhost:8000/healthz`}
+                                        href={`${process.env.BACKEND_INTERNAL_URL}/healthz`}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="text-green-600 hover:underline text-sm"
@@ -333,7 +333,7 @@ export default function AboutPage() {
                                     <p className="text-gray-600">
                                         Backend receives JSON-RPC 2.0 request at{" "}
                                         <code className="bg-gray-100 px-1 rounded">/mcp</code> and executes
-                                        the chosen function: attribute filtering, ChromaDB vector search,
+                                        the chosen function: attribute filtering, in-memory vector search,
                                         or simple listing.
                                     </p>
                                 </div>
@@ -423,14 +423,14 @@ export default function AboutPage() {
                                     <span className="text-white font-bold">🔗</span>
                                 </div>
                                 <h4 className="font-semibold text-purple-600">LangChain</h4>
-                                <p className="text-xs text-gray-600">LLM Application Framework</p>
+                                <p className="text-xs text-gray-600">OpenAI Embeddings Integration</p>
                             </div>
                             <div className="bg-white rounded-lg shadow-md p-4 text-center">
-                                <div className="w-12 h-12 bg-red-500 rounded-full flex items-center justify-center mx-auto mb-2">
-                                    <span className="text-white font-bold">🗃️</span>
+                                <div className="w-12 h-12 bg-orange-500 rounded-full flex items-center justify-center mx-auto mb-2">
+                                    <span className="text-white font-bold">🧠</span>
                                 </div>
-                                <h4 className="font-semibold text-red-600">ChromaDB</h4>
-                                <p className="text-xs text-gray-600">Vector Database</p>
+                                <h4 className="font-semibold text-orange-600">In-Memory Store</h4>
+                                <p className="text-xs text-gray-600">Pure Python Vector Search</p>
                             </div>
                         </div>
                     </div>
@@ -510,9 +510,9 @@ export default function AboutPage() {
                     </h2>
                     <div className="grid md:grid-cols-3 gap-6">
                         <div className="bg-white rounded-lg shadow-md p-6 text-center">
-                            <div className="text-3xl font-bold text-blue-600 mb-2">~200ms</div>
-                            <h3 className="text-lg font-semibold text-gray-800 mb-2">Semantic Search</h3>
-                            <p className="text-sm text-gray-600">ChromaDB vector similarity search response time</p>
+                            <div className="text-3xl font-bold text-blue-600 mb-2">~50ms</div>
+                            <h3 className="text-lg font-semibold text-gray-800 mb-2">In-Memory Search</h3>
+                            <p className="text-sm text-gray-600">Pure Python cosine similarity search response time</p>
                         </div>
                         <div className="bg-white rounded-lg shadow-md p-6 text-center">
                             <div className="text-3xl font-bold text-green-600 mb-2">~1-3s</div>
@@ -520,9 +520,9 @@ export default function AboutPage() {
                             <p className="text-sm text-gray-600">OpenAI Whisper speech-to-text processing</p>
                         </div>
                         <div className="bg-white rounded-lg shadow-md p-6 text-center">
-                            <div className="text-3xl font-bold text-purple-600 mb-2">~500ms</div>
-                            <h3 className="text-lg font-semibold text-gray-800 mb-2">End-to-End</h3>
-                            <p className="text-sm text-gray-600">Complete query processing (text input)</p>
+                            <div className="text-3xl font-bold text-purple-600 mb-2">~25MB</div>
+                            <h3 className="text-lg font-semibold text-gray-800 mb-2">Bundle Size</h3>
+                            <p className="text-sm text-gray-600">Vercel-optimized serverless deployment</p>
                         </div>
                     </div>
                 </section>
@@ -534,7 +534,7 @@ export default function AboutPage() {
                     </p>
                     <div className="flex justify-center space-x-4">
                         <a 
-                            href="https://github.com/yourusername/mcp-voice-app" 
+                            href="https://github.com/mkg5599/mcp-voice-app" 
                             className="text-blue-600 hover:underline"
                             target="_blank"
                             rel="noopener noreferrer"
@@ -542,7 +542,7 @@ export default function AboutPage() {
                             GitHub Repository
                         </a>
                         <a 
-                            href="http://localhost:8000/docs" 
+                            href={`${process.env.BACKEND_INTERNAL_URL}/docs`} 
                             className="text-purple-600 hover:underline"
                             target="_blank"
                             rel="noopener noreferrer"
