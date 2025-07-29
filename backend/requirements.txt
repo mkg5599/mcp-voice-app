@@ -7,4 +7,4 @@ PyYAML==6.0.2
 openai==1.97.0
 langchain-core==0.2.40
 langchain-openai==0.1.25
-chromadb==0.4.24
+httpx==0.28.1
