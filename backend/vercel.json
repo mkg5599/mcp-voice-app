@@ -13,13 +13,8 @@
     }
   ],
   "functions": {
-    "backend/main.py": {
-      "excludeFiles": [
-        "**/.chromadb/**",
-        "**/tests/**",
-        "**/__pycache__/**",
-        "**/.pytest_cache/**"
-      ]
+    "main.py": {
+      "excludeFiles": "{**/.chromadb/**,**/tests/**,**/__pycache__/**,**/.pytest_cache/**}"
     }
   }
 }
