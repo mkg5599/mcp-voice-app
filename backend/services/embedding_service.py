@@ -1,63 +1,75 @@
-"""OpenAI embeddings service."""
-from typing import List, Optional
+"""Gemini embeddings over plain HTTP (no SDK needed, keeps the serverless bundle small)."""
+from typing import Any, Dict, List, Literal
 
-from pydantic.v1 import SecretStr
-from langchain_openai import OpenAIEmbeddings
+import httpx
 
 from config.settings import (
-    OPENAI_API_KEY,
+    EMBEDDING_DIMENSIONS,
     EMBEDDING_MODEL,
-    EMBEDDING_TIMEOUT,
-    EMBEDDING_MAX_RETRIES,
+    EMBEDDING_TIMEOUT_S,
+    GEMINI_API_BASE,
+    GEMINI_API_KEY,
 )
 
+TaskType = Literal["RETRIEVAL_DOCUMENT", "RETRIEVAL_QUERY"]
+
+# Gemini accepts up to 100 texts per batchEmbedContents call.
+_MAX_BATCH = 100
+
+
+class EmbeddingError(RuntimeError):
+    """Raised when the embedding provider is unavailable or rejects a request."""
+
+
 class EmbeddingService:
-    """Service for managing OpenAI embeddings."""
+    """Creates vectors for products (documents) and user queries."""
 
-    def __init__(self) -> None:
-        self._embeddings: Optional[OpenAIEmbeddings] = None
+    def __init__(self, api_key: str | None = GEMINI_API_KEY, model: str = EMBEDDING_MODEL) -> None:
+        self.api_key = api_key
+        self.model = model
 
-    async def initialize(self) -> bool:
-        """Initialize the OpenAI embeddings client."""
-        if not OPENAI_API_KEY:
-            print("CRITICAL: OPENAI_API_KEY not found. Semantic search will not work.")
-            return False
+    def is_configured(self) -> bool:
+        return bool(self.api_key)
 
+    async def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        vectors: List[List[float]] = []
+        for i in range(0, len(texts), _MAX_BATCH):
+            vectors.extend(await self._batch_embed(texts[i : i + _MAX_BATCH], "RETRIEVAL_DOCUMENT"))
+        return vectors
+
+    async def embed_query(self, text: str) -> List[float]:
+        return (await self._batch_embed([text], "RETRIEVAL_QUERY"))[0]
+
+    async def _batch_embed(self, texts: List[str], task_type: TaskType) -> List[List[float]]:
+        if not self.api_key:
+            raise EmbeddingError("GEMINI_API_KEY is not set")
+
+        model_path = f"models/{self.model}"
+        body: Dict[str, Any] = {
+            "requests": [
+                {
+                    "model": model_path,
+                    "content": {"parts": [{"text": t}]},
+                    "taskType": task_type,
+                    "outputDimensionality": EMBEDDING_DIMENSIONS,
+                }
+                for t in texts
+            ]
+        }
+        url = f"{GEMINI_API_BASE}/{model_path}:batchEmbedContents"
         try:
-            print("Initializing OpenAI embeddings...")
+            async with httpx.AsyncClient(timeout=EMBEDDING_TIMEOUT_S) as client:
+                resp = await client.post(url, json=body, headers={"x-goog-api-key": self.api_key})
+        except httpx.HTTPError as e:
+            raise EmbeddingError(f"Gemini embeddings request failed: {type(e).__name__}") from e
 
-            # langchain-openai expects `api_key: SecretStr | None`
-            self._embeddings = OpenAIEmbeddings(
-                api_key=SecretStr(OPENAI_API_KEY),
-                model=EMBEDDING_MODEL,
-                timeout=EMBEDDING_TIMEOUT,         # float | httpx.Timeout | None
-                max_retries=EMBEDDING_MAX_RETRIES, # int
-            )
+        if resp.status_code != 200:
+            raise EmbeddingError(f"Gemini embeddings failed ({resp.status_code}): {resp.text[:300]}")
 
-            print("OpenAI embeddings initialized successfully")
-            return True
-
-        except Exception as e:
-            print(f"Failed to initialize OpenAI embeddings: {e}")
-            self._embeddings = None
-            return False
-
-    def is_ready(self) -> bool:
-        """Check if embeddings service is ready."""
-        return self._embeddings is not None
-
-    def embed_documents(self, documents: List[str]) -> List[List[float]]:
-        """Generate embeddings for a list of documents."""
-        if not self._embeddings:
-            raise RuntimeError("Embeddings service not initialized")
-        return self._embeddings.embed_documents(documents)
-
-    def embed_query(self, query: str) -> List[float]:
-        """Generate embedding for a single query."""
-        if not self._embeddings:
-            raise RuntimeError("Embeddings service not initialized")
-        return self._embeddings.embed_query(query)
+        embeddings = resp.json().get("embeddings", [])
+        if len(embeddings) != len(texts):
+            raise EmbeddingError("Gemini returned an unexpected number of embeddings")
+        return [e["values"] for e in embeddings]
 
 
-# Global embedding service instance
 embedding_service = EmbeddingService()

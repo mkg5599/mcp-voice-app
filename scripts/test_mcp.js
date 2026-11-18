@@ -1,1 +1,131 @@
-import { readFileSync, writeFileSync } from 'fs';import { join } from 'path';// --- Environment Variables ---const BACKEND_INTERNAL_URL = process.env.BACKEND_INTERNAL_URL;const GEMINI_API_KEY = process.env.GEMINI_API_KEY;const OPENAI_API_KEY = process.env.OPENAI_API_KEY;if (!BACKEND_INTERNAL_URL) {  console.error("Error: BACKEND_INTERNAL_URL environment variable is not set.");  process.exit(1);}if (!GEMINI_API_KEY) {  console.error("Error: GEMINI_API_KEY environment variable is not set.");  process.exit(1);}if (!OPENAI_API_KEY) {  console.error("Error: OPENAI_API_KEY environment variable is not set.");  process.exit(1);}// --- Helper Functions ---async function fetchJson(url: string, options?: RequestInit) {  const response = await fetch(url, options);  if (!response.ok) {    const errorText = await response.text();    throw new Error(`HTTP error! Status: ${response.status}, Body: ${errorText}`);  }  return response.json();}function createDummyAudioFile(filename: string, size: number) {  const buffer = Buffer.alloc(size, 0);  writeFileSync(filename, buffer);  return filename;}// --- Tests ---async function runTests() {  console.log("\n--- Running MCP System Tests ---");  let discoveryVersion: string | undefined;  let chatToolCalled: string | undefined;  let chatProductsCount: number = 0;  let chatLatency: number = 0;  let transcriptionLength: number = 0;  let allTestsPassed = true;  // 1. Discovery Consistency Test (Node)  try {    console.log("\n1. Testing Discovery Endpoint...");    const mcpDiscovery = await fetchJson(`${BACKEND_INTERNAL_URL}/.well-known/mcp.json`);    console.log("  Fetched MCP Discovery:", JSON.stringify(mcpDiscovery, null, 2));    if (!mcpDiscovery || !mcpDiscovery.tools || mcpDiscovery.tools.length === 0) {      throw new Error("MCP Discovery is empty or malformed.");    }    const listProductsTool = mcpDiscovery.tools.find((t: any) => t.name === "list_products");    const searchProductsTool = mcpDiscovery.tools.find((t: any) => t.name === "search_products");    if (!listProductsTool) throw new Error("list_products tool not found.");    if (!searchProductsTool) throw new Error("search_products tool not found.");    if (!searchProductsTool.input_schema || !searchProductsTool.input_schema.properties) {      throw new Error("search_products input_schema is missing or malformed.");    }    discoveryVersion = mcpDiscovery.version;    console.log("  Discovery Endpoint: PASSED");  } catch (error: any) {    console.error("  Discovery Endpoint: FAILED -", error.message);    allTestsPassed = false;  }  // 2. End-to-End Chat Test (dummy prompt) & Latency Log Check  try {    console.log("\n2. Testing End-to-End Chat (search_products)...");    const chatResponse = await fetchJson(`http://localhost:3000/api/chat`, {      method: "POST",      headers: { "Content-Type": "application/json" },      body: JSON.stringify({ text: "Show me products in london under 50" }),    });    console.log("  Chat Response:", JSON.stringify(chatResponse, null, 2));    if (!chatResponse.products || !Array.isArray(chatResponse.products)) {      throw new Error("Chat response did not return products array.");    }    if (chatResponse.tool_called !== "search_products") {      throw new Error("Chat response did not indicate search_products was called.");    }    if (typeof chatResponse.latency_ms !== "number") {      throw new Error("Chat response missing latency_ms.");    }    chatToolCalled = chatResponse.tool_called;    chatProductsCount = chatResponse.products.length;    chatLatency = chatResponse.latency_ms;    console.log("  End-to-End Chat: PASSED");  } catch (error: any) {    console.error("  End-to-End Chat: FAILED -", error.message);    allTestsPassed = false;  }  // 3. Invalid Arg Test (via chat endpoint)  try {    console.log("\n3. Testing Invalid Argument Handling...");    const invalidArgResponse = await fetch(`http://localhost:3000/api/chat`, {      method: "POST",      headers: { "Content-Type": "application/json" },      body: JSON.stringify({ text: "Search for products with bogusKey: 1" }), // This prompt should trigger search_products with an invalid arg    });    if (invalidArgResponse.ok) {      throw new Error("Expected 4xx error for invalid argument, but got success.");    }    const errorData = await invalidArgResponse.json();    if (!errorData.error || !errorData.details) {      throw new Error("Expected structured error response.");    }    if (!errorData.details.includes("Unknown argument 'bogusKey'")) {      console.warn("  Warning: Invalid argument error message might not be specific enough.", errorData.details);    }    console.log("  Invalid Argument Handling: PASSED");  } catch (error: any) {    console.error("  Invalid Argument Handling: FAILED -", error.message);    allTestsPassed = false;  }  // 4. Transcribe Test  let dummyAudioPath: string | undefined;  try {    console.log("\n4. Testing Transcribe Endpoint...");    dummyAudioPath = createDummyAudioFile('dummy_audio.webm', 1024 * 100); // 100KB dummy file    const audioFile = readFileSync(dummyAudioPath);    const formData = new FormData();    formData.append('file', new Blob([audioFile], { type: 'audio/webm' }), 'dummy_audio.webm');    const transcribeResponse = await fetchJson(`http://localhost:3000/api/transcribe`, {      method: "POST",      body: formData,    });    console.log("  Transcribe Response:", JSON.stringify(transcribeResponse, null, 2));    if (!transcribeResponse.text || typeof transcribeResponse.text !== "string") {      throw new Error("Transcribe response missing text or not a string.");    }    transcriptionLength = transcribeResponse.text.length;    console.log("  Transcribe Endpoint: PASSED");  } catch (error: any) {    console.error("  Transcribe Endpoint: FAILED -", error.message);    allTestsPassed = false;  } finally {    if (dummyAudioPath) {      try { require('fs').unlinkSync(dummyAudioPath); } catch (e) { /* ignore */ }    }  }  // --- Final Summary ---  console.log("\n--- Test Summary ---");  if (allTestsPassed) {    console.log("SUCCESS:");    console.log(` - discovery loaded with 2 tools (version ${discoveryVersion})`);    console.log(` - chat function call executed (tool=${chatToolCalled}, products=${chatProductsCount})`);    console.log(` - transcription succeeded (length=${transcriptionLength} chars)`);    console.log(` - latency_ms logged (example: ${chatLatency}ms)`);  } else {    console.log("FAILURE: One or more tests failed. Please review the logs above.");  }}runTests();
+#!/usr/bin/env node
+/**
+ * Smoke test for the product catalog MCP server.
+ *
+ * Sends raw JSON-RPC over Streamable HTTP (initialize, tools/list, tools/call,
+ * resources/read, prompts/get) to ${BACKEND_URL}/mcp. No dependencies; needs Node 18+.
+ *
+ *   node scripts/test_mcp.js
+ *   BACKEND_URL=https://<your-backend>.vercel.app node scripts/test_mcp.js
+ */
+const BASE = (process.env.BACKEND_URL ?? "http://localhost:8000").replace(/\/+$/, "");
+const ENDPOINT = `${BASE}/mcp`;
+const EXPECTED_TOOLS = ["list_products", "search_products", "semantic_product_search", "get_product"];
+
+let nextId = 1;
+let failures = 0;
+
+async function rpc(method, params) {
+  const res = await fetch(ENDPOINT, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      accept: "application/json, text/event-stream",
+    },
+    body: JSON.stringify({ jsonrpc: "2.0", id: nextId++, method, ...(params ? { params } : {}) }),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${text.slice(0, 300)}`);
+
+  // The server replies with JSON; accept an SSE-framed reply too, in case a deployment streams.
+  const body = (res.headers.get("content-type") ?? "").includes("text/event-stream")
+    ? JSON.parse(text.split("\n").filter((l) => l.startsWith("data:")).pop().slice(5))
+    : JSON.parse(text);
+  if (body.error) throw new Error(`JSON-RPC error ${body.error.code}: ${body.error.message}`);
+  return body.result;
+}
+
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+
+async function check(name, fn) {
+  try {
+    const detail = await fn();
+    console.log(`PASS  ${name}${detail ? `: ${detail}` : ""}`);
+  } catch (err) {
+    failures++;
+    console.log(`FAIL  ${name}: ${err instanceof Error ? err.message : err}`);
+  }
+}
+
+async function main() {
+  console.log(`MCP endpoint: ${ENDPOINT}\n`);
+
+  await check("initialize", async () => {
+    const r = await rpc("initialize", {
+      protocolVersion: "2025-06-18",
+      capabilities: {},
+      clientInfo: { name: "test_mcp.js", version: "2.0.0" },
+    });
+    assert(r.serverInfo?.name === "product-catalog", `unexpected server ${JSON.stringify(r.serverInfo)}`);
+    return `${r.serverInfo.name} ${r.serverInfo.version}, protocol ${r.protocolVersion}`;
+  });
+
+  await check("tools/list", async () => {
+    const { tools } = await rpc("tools/list");
+    const names = tools.map((t) => t.name);
+    for (const expected of EXPECTED_TOOLS) assert(names.includes(expected), `missing tool ${expected}`);
+    assert(tools.every((t) => t.outputSchema), "every tool should declare an outputSchema");
+    assert(tools.every((t) => t.annotations?.readOnlyHint), "every tool should be read-only");
+    return names.join(", ");
+  });
+
+  const call = async (name, args) => {
+    const r = await rpc("tools/call", { name, arguments: args });
+    assert(!r.isError, r.content?.[0]?.text ?? "tool returned isError");
+    return r.structuredContent;
+  };
+
+  await check("tools/call list_products", async () => {
+    const r = await call("list_products", {});
+    assert(r.count > 0 && r.method === "catalog", JSON.stringify(r).slice(0, 200));
+    return `${r.count} products`;
+  });
+
+  await check("tools/call search_products", async () => {
+    const r = await call("search_products", { colors: ["red"], max_price: 50 });
+    assert(r.method === "filter", `method ${r.method}`);
+    assert(r.products.every((p) => p.price <= 50), "a product exceeds max_price");
+    return `${r.count} red items under $50`;
+  });
+
+  await check("tools/call semantic_product_search", async () => {
+    const r = await call("semantic_product_search", { query: "something warm for winter", top_k: 3 });
+    assert(["semantic", "keyword_fallback"].includes(r.method), `method ${r.method}`);
+    return `${r.count} results via ${r.method}: ${r.products.map((p) => p.name).join(", ")}`;
+  });
+
+  await check("tools/call get_product", async () => {
+    const r = await call("get_product", { product_id: 1 });
+    assert(r.id === 1, `got id ${r.id}`);
+    return r.name;
+  });
+
+  await check("tools/call get_product (unknown id)", async () => {
+    const r = await rpc("tools/call", { name: "get_product", arguments: { product_id: 999999 } });
+    assert(r.isError === true, "expected isError: true");
+    return "isError as expected";
+  });
+
+  await check("resources/read catalog://products", async () => {
+    const r = await rpc("resources/read", { uri: "catalog://products" });
+    const products = JSON.parse(r.contents[0].text);
+    assert(Array.isArray(products) && products.length > 0, "empty catalog resource");
+    return `${products.length} products`;
+  });
+
+  await check("prompts/get shopping_assistant", async () => {
+    const r = await rpc("prompts/get", { name: "shopping_assistant", arguments: { need: "a rain jacket" } });
+    assert(r.messages?.length > 0, "no prompt messages");
+    return `${r.messages.length} message(s)`;
+  });
+
+  console.log(failures ? `\n${failures} check(s) failed` : "\nAll checks passed");
+  process.exitCode = failures ? 1 : 0;
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exitCode = 1;
+});

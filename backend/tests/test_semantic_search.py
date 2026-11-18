@@ -1,68 +1,84 @@
-from fastapi.testclient import TestClient
-from main import app
+"""Semantic search ranking and filtering, using a deterministic fake embedder."""
+import math
+import re
+from typing import List
 
-client = TestClient(app)
+import pytest
 
-def test_semantic_search_endpoint():
-    """Test the semantic search REST endpoint."""
-    response = client.post(
-        "/products/semantic-search",
-        json={"query": "comfortable black hoodie", "top_k": 3}
-    )
-    assert response.status_code == 200
-    data = response.json()
-    assert isinstance(data, list)
-    assert len(data) <= 3
+from models.requests import SemanticSearch
+from services.embedding_service import EmbeddingError, EmbeddingService
+from services.product_service import ProductService, keyword_search
+from utils.cache import load_products
 
-def test_semantic_search_mcp():
-    """Test semantic search via MCP JSON-RPC."""
-    response = client.post(
-        "/mcp",
-        json={
-            "jsonrpc": "2.0",
-            "method": "semantic_product_search",
-            "params": {"query": "warm winter clothing", "top_k": 2},
-            "id": 1
-        }
-    )
-    assert response.status_code == 200
-    data = response.json()
-    assert data["jsonrpc"] == "2.0"
-    assert "result" in data
-    assert isinstance(data["result"], list)
-    assert len(data["result"]) <= 2
+pytestmark = pytest.mark.anyio
 
-def test_semantic_search_with_similarity_scores():
-    """Test that semantic search returns similarity scores."""
-    response = client.post(
-        "/products/semantic-search",
-        json={"query": "streetwear fashion", "top_k": 5}
-    )
-    assert response.status_code == 200
-    data = response.json()
-    assert isinstance(data, list)
-    
-    # Check if products have similarity scores (may be from fallback)
-    for product in data:
-        assert "similarity_score" in product
-        assert 0 <= product["similarity_score"] <= 1
+VOCAB = ["hoodie", "streetwear", "winter", "warm", "running", "athletic", "leather", "bag", "summer", "hiking"]
 
-def test_empty_semantic_search():
-    """Test semantic search with empty query."""
-    response = client.post(
-        "/products/semantic-search",
-        json={"query": "", "top_k": 3}
-    )
-    # Should still work, might return empty or all products depending on implementation
-    assert response.status_code == 200
 
-def test_semantic_search_large_top_k():
-    """Test semantic search with large top_k value."""
-    response = client.post(
-        "/products/semantic-search",
-        json={"query": "clothing", "top_k": 100}
-    )
-    assert response.status_code == 200
-    data = response.json()
-    assert isinstance(data, list)
-    # Should not exceed actual product count
+class FakeEmbeddings(EmbeddingService):
+    def __init__(self, fail: bool = False) -> None:
+        super().__init__(api_key="test", model="fake")
+        self.fail = fail
+        self.document_calls = 0
+
+    def _vec(self, text: str) -> List[float]:
+        words = re.findall(r"[a-z]+", text.lower())
+        v = [float(sum(w.startswith(term) for w in words)) for term in VOCAB]
+        n = math.sqrt(sum(x * x for x in v)) or 1.0
+        return [x / n for x in v]
+
+    async def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        if self.fail:
+            raise EmbeddingError("quota exhausted")
+        self.document_calls += 1
+        return [self._vec(t) for t in texts]
+
+    async def embed_query(self, text: str) -> List[float]:
+        return self._vec(text)
+
+
+async def test_ranks_by_meaning_and_builds_index_once():
+    fake = FakeEmbeddings()
+    service = ProductService(embeddings=fake)
+    r = await service.semantic_search(SemanticSearch(query="streetwear hoodie", top_k=3))
+    assert r.method == "semantic"
+    assert "Hoodie" in r.products[0].name
+    assert r.products[0].similarity_score is not None
+    scores = [p.similarity_score for p in r.products]
+    assert scores == sorted(scores, reverse=True)
+
+    await service.semantic_search(SemanticSearch(query="warm winter", top_k=3))
+    assert fake.document_calls == 1
+
+
+async def test_filters_apply_to_semantic_results():
+    service = ProductService(embeddings=FakeEmbeddings())
+    r = await service.semantic_search(SemanticSearch(query="hoodie", max_price=30, top_k=10))
+    assert all(p.price <= 30 for p in r.products)
+
+
+async def test_falls_back_to_keywords_when_embeddings_fail():
+    service = ProductService(embeddings=FakeEmbeddings(fail=True))
+    r = await service.semantic_search(SemanticSearch(query="black hoodie", top_k=2))
+    assert r.method == "keyword_fallback"
+    assert service.index_error == "quota exhausted"
+    assert r.count > 0
+
+
+def test_keyword_search_handles_plurals_and_stopwords():
+    results = keyword_search("show me some hoodies", load_products(), 5)
+    assert results and all("hoodie" in p["tags"] for p in results)
+    assert all(0 <= p["similarity_score"] <= 1 for p in results)
+
+
+async def test_network_errors_fall_back_to_keywords(monkeypatch):
+    import httpx
+
+    async def boom(*args, **kwargs):
+        raise httpx.ConnectTimeout("timed out")
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", boom)
+    service = ProductService(embeddings=EmbeddingService(api_key="test-key"))
+    r = await service.semantic_search(SemanticSearch(query="hoodie", top_k=2))
+    assert r.method == "keyword_fallback"
+    assert "ConnectTimeout" in (service.index_error or "")
