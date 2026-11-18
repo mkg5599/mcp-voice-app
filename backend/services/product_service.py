@@ -1,274 +1,176 @@
-"""Product business logic and search implementations."""
+"""Product catalog logic: filtering, lookup, and semantic search."""
+import asyncio
 import json
+import re
 import time
-from typing import Any, Dict, List
-from models.requests import ProductSearch, SemanticSearch, RagRequest
+from typing import Any, Dict, List, Optional
+
+from config.settings import IS_VERCEL, SEMANTIC_DEFAULT_TOP_K, SEMANTIC_MIN_SIMILARITY
+from models.requests import ProductFilters, ProductResults, SemanticSearch
+from services.embedding_service import EmbeddingError, EmbeddingService, embedding_service
 from services.vector_store import InMemoryVectorStore
-from services.embedding_service import embedding_service
-from services.llm_service import llm_service
 from utils.cache import load_products
-from config.settings import EMBEDDING_BATCH_SIZE, IS_VERCEL, RAG_CONTEXT_SIZE, RAG_SIMILARITY_THRESHOLD
+
+_WORD = re.compile(r"[a-z0-9]+")
+_STOPWORDS = {
+    "a", "an", "and", "the", "for", "of", "to", "in", "on", "with", "me", "show", "find",
+    "some", "any", "i", "want", "need", "looking", "something", "items", "products", "under",
+}
+
+
+def _log(evt: str, **fields: Any) -> None:
+    print(json.dumps({"evt": evt, "deployment": "vercel" if IS_VERCEL else "local", **fields}))
+
+
+def product_document(product: Dict[str, Any]) -> str:
+    """Text that represents a product in the embedding space."""
+    specs = "; ".join(f"{k}: {v}" for k, v in product.get("specs", {}).items())
+    return "\n".join(
+        [
+            f"Name: {product['name']}",
+            f"Description: {product.get('description', '')}",
+            f"Tags: {', '.join(product.get('tags', []))}",
+            f"Colors: {', '.join(product.get('colors', []))}",
+            f"Specs: {specs}",
+            f"City: {product.get('city', '')}",
+        ]
+    )
+
+
+def apply_filters(products: List[Dict[str, Any]], f: ProductFilters) -> List[Dict[str, Any]]:
+    results = products
+    if f.colors:
+        want = {c.lower() for c in f.colors if c}
+        results = [p for p in results if want & {c.lower() for c in p.get("colors", [])}]
+    if f.tags:
+        want_tags = {t.lower() for t in f.tags if t}
+        results = [p for p in results if want_tags & {t.lower() for t in p.get("tags", [])}]
+    if f.city:
+        city = f.city.strip().lower()
+        results = [p for p in results if p.get("city", "").lower() == city]
+    if f.min_price is not None:
+        results = [p for p in results if p.get("price", 0) >= f.min_price]
+    if f.max_price is not None:
+        results = [p for p in results if p.get("price", 0) <= f.max_price]
+    return results
+
 
 class ProductService:
-    """Service for product operations and search."""
-    
-    def __init__(self, vector_store: InMemoryVectorStore):
-        self.vector_store = vector_store
-    
-    def list_products(self) -> List[Dict[str, Any]]:
-        """Get all products."""
-        return load_products()
-    
-    def search_products(self, params: ProductSearch) -> List[Dict[str, Any]]:
-        """Search products by filters (colors, city, price range)."""
+    def __init__(
+        self,
+        vector_store: Optional[InMemoryVectorStore] = None,
+        embeddings: EmbeddingService = embedding_service,
+    ) -> None:
+        self.vector_store = vector_store or InMemoryVectorStore()
+        self.embeddings = embeddings
+        self._index_lock = asyncio.Lock()
+        self._index_error: Optional[str] = None
+
+    # ---- Simple operations -------------------------------------------------
+
+    def list_products(self) -> ProductResults:
         products = load_products()
-        results = products
+        return ProductResults(count=len(products), products=products, method="catalog")  # type: ignore[arg-type]
 
-        # Colors (case-insensitive intersection)
-        if params.colors:
-            want = {c.lower() for c in params.colors if c}
-            results = [
-                p for p in results
-                if want & {c.lower() for c in p.get("colors", [])}
-            ]
+    def search_products(self, filters: ProductFilters) -> ProductResults:
+        results = apply_filters(load_products(), filters)
+        return ProductResults(count=len(results), products=results, method="filter")  # type: ignore[arg-type]
 
-        # City (case-insensitive exact match)
-        if params.city:
-            city_l = params.city.lower()
-            results = [p for p in results if p.get("city", "").lower() == city_l]
+    def get_product(self, product_id: int) -> Optional[Dict[str, Any]]:
+        return next((p for p in load_products() if p["id"] == product_id), None)
 
-        # Min price
-        if params.min_price is not None:
-            results = [p for p in results if p.get("price", 0) >= params.min_price]
+    # ---- Semantic search ---------------------------------------------------
 
-        # Max price
-        if params.max_price is not None:
-            results = [p for p in results if p.get("price", 0) <= params.max_price]
+    @property
+    def semantic_ready(self) -> bool:
+        return self.vector_store.count() > 0
 
-        return results
+    @property
+    def index_error(self) -> Optional[str]:
+        return self._index_error
 
-    async def semantic_search(self, params: SemanticSearch) -> List[Dict[str, Any]]:
-        """Perform semantic search using in-memory vector store + OpenAI embeddings."""
-        if not embedding_service.is_ready() or self.vector_store.count() == 0:
-            print("Vector store not initialized. Using fallback text search.")
-            return self.fallback_text_search(params.query, params.top_k or 5)
-        
-        t0 = time.time()
-        try:
-            print(f"Performing semantic search for: '{params.query}'")
-            
-            # Generate query embedding using OpenAI
-            query_embedding = embedding_service.embed_query(params.query)
-            
-            # Perform similarity search in memory
-            similar_docs = self.vector_store.similarity_search(
-                query_embedding=query_embedding,
-                k=params.top_k or 5
-            )
-            
-            print(f"Found {len(similar_docs)} similar documents")
-            
-            # Get full product data for each result
+    async def ensure_index(self) -> bool:
+        """Embed the catalog once per process (lazily, so cold starts stay fast)."""
+        if self.semantic_ready:
+            return True
+        if not self.embeddings.is_configured():
+            self._index_error = "GEMINI_API_KEY is not set"
+            return False
+        async with self._index_lock:
+            if self.semantic_ready:
+                return True
+            t0 = time.time()
             products = load_products()
-            product_map = {str(p["id"]): p for p in products}
-            
-            search_results = []
-            for doc in similar_docs:
-                product_id = doc['id']
-                if product_id in product_map:
-                    product = product_map[product_id].copy()
-                    product["similarity_score"] = float(doc['similarity'])
-                    search_results.append(product)
-            
-            duration_ms = int((time.time() - t0) * 1000)
-            print(json.dumps({
-                "evt": "semantic_search",
-                "query": params.query,
-                "result_count": len(search_results),
-                "duration_ms": duration_ms,
-                "vector_store": "in_memory_openai",
-                "deployment": "vercel" if IS_VERCEL else "local"
-            }))
-            
-            return search_results
-            
-        except Exception as e:
-            duration_ms = int((time.time() - t0) * 1000)
-            print(f"Semantic search error: {e}")
-            import traceback
-            traceback.print_exc()
-            print(json.dumps({
-                "evt": "semantic_search_error",
-                "query": params.query,
-                "duration_ms": duration_ms,
-                "error": str(e),
-                "vector_store": "in_memory_failed"
-            }))
-            # Fall back to simple text search
-            return self.fallback_text_search(params.query, params.top_k or 5)
-
-    async def rag_query(self, params: RagRequest) -> Dict[str, Any]:
-        """Perform RAG query: retrieve relevant products and generate AI response."""
-        if not llm_service.is_ready():
-            raise RuntimeError("LLM service not initialized. RAG unavailable.")
-        
-        t0 = time.time()
-        try:
-            print(f"Performing RAG query for: '{params.query}'")
-            
-            # Step 1: Retrieve relevant products using semantic search
-            semantic_params = SemanticSearch(
-                query=params.query, 
-                top_k=params.context_size or RAG_CONTEXT_SIZE
-            )
-            retrieved_products = await self.semantic_search(semantic_params)
-            
-            # Step 2: Filter by similarity threshold (optional)
-            filtered_products = [
-                p for p in retrieved_products 
-                if p.get('similarity_score', 0) >= RAG_SIMILARITY_THRESHOLD
-            ]
-            
-            # Step 3: Generate response using LLM
-            ai_response = await llm_service.generate_response(
-                query=params.query,
-                context_products=filtered_products,
-                system_prompt=params.system_prompt
-            )
-            
-            duration_ms = int((time.time() - t0) * 1000)
-            
-            result = {
-                "query": params.query,
-                "ai_response": ai_response,
-                "retrieved_products": filtered_products,
-                "context_size": len(filtered_products),
-                "similarity_threshold": RAG_SIMILARITY_THRESHOLD,
-                "processing_time_ms": duration_ms
-            }
-            
-            print(json.dumps({
-                "evt": "rag_query",
-                "query": params.query,
-                "context_products": len(filtered_products),
-                "duration_ms": duration_ms,
-                "response_length": len(ai_response),
-                "deployment": "vercel" if IS_VERCEL else "local"
-            }))
-            
-            return result
-            
-        except Exception as e:
-            duration_ms = int((time.time() - t0) * 1000)
-            print(f"RAG query error: {e}")
-            import traceback
-            traceback.print_exc()
-            print(json.dumps({
-                "evt": "rag_query_error",
-                "query": params.query,
-                "duration_ms": duration_ms,
-                "error": str(e)
-            }))
-            raise e
-
-    def fallback_text_search(self, query: str, top_k: int) -> List[Dict[str, Any]]:
-        """Fallback text search when vector search is unavailable."""
-        print(f"Using fallback text search for: '{query}'")
-        products = load_products()
-        query_lower = query.lower()
-        
-        scored_products = []
-        for product in products:
-            score = 0
-            # Check name
-            if query_lower in product.get("name", "").lower():
-                score += 3
-            # Check description
-            if query_lower in product.get("description", "").lower():
-                score += 2
-            # Check tags
-            for tag in product.get("tags", []):
-                if query_lower in tag.lower():
-                    score += 1
-            # Check colors
-            for color in product.get("colors", []):
-                if query_lower in color.lower():
-                    score += 1
-            
-            if score > 0:
-                product_copy = product.copy()
-                product_copy["similarity_score"] = score / 10.0
-                scored_products.append(product_copy)
-        
-        scored_products.sort(key=lambda x: x["similarity_score"], reverse=True)
-        return scored_products[:top_k]
-    
-    async def populate_vector_store(self):
-        """Populate in-memory vector store with product embeddings."""
-        if not embedding_service.is_ready():
-            print("Embeddings not initialized")
-            return
-            
-        try:
-            # Load products
-            print("Loading products...")
-            products = load_products()
-            print(f"Loaded {len(products)} products")
-            
-            # Prepare data
-            documents = []
-            metadatas = []
-            ids = []
-            
-            print("Preparing documents...")
-            for product in products:
-                # Combine name, description, tags, and city for rich context
-                content_parts = [
-                    f"Name: {product['name']}",
-                    f"Description: {product.get('description', '')}",
-                    f"Tags: {', '.join(product.get('tags', []))}",
-                    f"City: {product.get('city', '')}",
-                    f"Colors: {', '.join(product.get('colors', []))}"
-                ]
-                content = "\n".join(content_parts)
-                
-                # Create metadata
-                metadata = {
-                    "name": str(product["name"]),
-                    "price": float(product.get("price", 0)),
-                    "city": str(product.get("city", "")),
-                    "colors": product.get("colors", []),
-                    "tags": product.get("tags", [])
-                }
-                
-                documents.append(content)
-                metadatas.append(metadata)
-                ids.append(str(product["id"]))
-            
-            # Generate embeddings using OpenAI in batches
-            print("Generating embeddings via OpenAI...")
-            embeddings_list = []
-            
-            for i in range(0, len(documents), EMBEDDING_BATCH_SIZE):
-                batch_docs = documents[i:i + EMBEDDING_BATCH_SIZE]
-                
-                # Use OpenAI to generate embeddings
-                batch_embeddings = embedding_service.embed_documents(batch_docs)
-                embeddings_list.extend(batch_embeddings)
-                print(f"Generated embeddings for batch {i//EMBEDDING_BATCH_SIZE + 1}/{(len(documents) + EMBEDDING_BATCH_SIZE - 1)//EMBEDDING_BATCH_SIZE}")
-            
-            # Add to in-memory vector store
-            print("Adding documents to in-memory vector store...")
+            try:
+                vectors = await self.embeddings.embed_documents([product_document(p) for p in products])
+            except EmbeddingError as e:
+                self._index_error = str(e)
+                _log("index_build_failed", error=str(e)[:300])
+                return False
+            self.vector_store.clear()
             self.vector_store.add_documents(
-                ids=ids,
-                embeddings=embeddings_list,
-                documents=documents,
-                metadatas=metadatas
+                ids=[str(p["id"]) for p in products],
+                embeddings=vectors,
+                documents=[product_document(p) for p in products],
+                metadatas=[{"name": p["name"]} for p in products],
             )
-            
-            print(f"Successfully populated in-memory vector store with {len(documents)} products")
-            
-        except Exception as e:
-            print(f"Error populating vector store: {e}")
-            import traceback
-            traceback.print_exc()
+            self._index_error = None
+            _log("index_built", products=len(products), duration_ms=int((time.time() - t0) * 1000))
+            return True
+
+    async def semantic_search(self, params: SemanticSearch) -> ProductResults:
+        top_k = params.top_k or SEMANTIC_DEFAULT_TOP_K
+        candidates = apply_filters(load_products(), params)
+        allowed = {str(p["id"]): p for p in candidates}
+        t0 = time.time()
+
+        if params.query.strip() and await self.ensure_index():
+            try:
+                query_vec = await self.embeddings.embed_query(params.query)
+                ranked = self.vector_store.similarity_search(query_vec, k=self.vector_store.count())
+                results: List[Dict[str, Any]] = []
+                for doc in ranked:
+                    if doc["id"] in allowed and doc["similarity"] >= SEMANTIC_MIN_SIMILARITY:
+                        results.append({**allowed[doc["id"]], "similarity_score": round(max(0.0, doc["similarity"]), 4)})
+                    if len(results) >= top_k:
+                        break
+                _log("semantic_search", query=params.query, results=len(results), duration_ms=int((time.time() - t0) * 1000))
+                return ProductResults(count=len(results), products=results, method="semantic")  # type: ignore[arg-type]
+            except EmbeddingError as e:
+                _log("semantic_search_failed", error=str(e)[:300])
+
+        results = keyword_search(params.query, candidates, top_k)
+        return ProductResults(count=len(results), products=results, method="keyword_fallback")  # type: ignore[arg-type]
+
+
+def keyword_search(query: str, products: List[Dict[str, Any]], top_k: int) -> List[Dict[str, Any]]:
+    """Token-overlap ranking, used when embeddings are unavailable."""
+    tokens = [t for t in _WORD.findall(query.lower()) if t not in _STOPWORDS]
+    if not tokens:
+        return [{**p, "similarity_score": 0.0} for p in products[:top_k]]
+
+    scored = []
+    for p in products:
+        name = set(_WORD.findall(p.get("name", "").lower()))
+        desc = set(_WORD.findall(p.get("description", "").lower()))
+        tags = set(_WORD.findall(" ".join(p.get("tags", [])).lower()))
+        colors = {c.lower() for c in p.get("colors", [])}
+        score = 0.0
+        for t in tokens:
+            stem = t.rstrip("s")
+            if t in name or stem in name:
+                score += 3
+            if t in tags or stem in tags:
+                score += 2
+            if t in colors:
+                score += 2
+            if t in desc or stem in desc:
+                score += 1
+        if score > 0:
+            scored.append({**p, "similarity_score": round(min(1.0, score / (8 * len(tokens))), 4)})
+
+    scored.sort(key=lambda x: x["similarity_score"], reverse=True)
+    return scored[:top_k]
+
+
+product_service = ProductService()

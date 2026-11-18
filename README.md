@@ -1,499 +1,264 @@
-# [Agentic Product App - Model Context Protocol + RAG](https://mcp-voice-app.manojkumargummadi.com/)
+# [Voice Shopping Agent: MCP + Gemini](https://mcp-voice-app.manojkumargummadi.com/)
 
-An end-to-end **voice + natural language product search + AI chat assistant** application demonstrating:
+A voice-enabled shopping assistant that answers questions about a product catalog by calling tools on a
+real **Model Context Protocol (MCP)** server.
 
-* **Next.js (React + TypeScript)** acting as an *MCP Host* (LLM orchestration + Whisper transcription + RAG interface).
-* **FastAPI (Python)** as a **pure MCP Tool Server** exposing structured product functions, semantic search, and RAG capabilities.
-* **Google Gemini 2.0 Flash (@google/genai)** for semantic interpretation + *automatic function calling*.
-* **OpenAI Whisper (via Next.js serverless route)** for speech-to-text transcription.
-* **In-Memory Vector Search** powered by LangChain + OpenAI Embeddings with pure Python cosine similarity.
-* **RAG (Retrieval-Augmented Generation)** using OpenAI GPT models for conversational product assistance.
-* **JSON-RPC 2.0 over HTTP** (`/mcp`) for tool invocation.
-* **MCP-style discovery** via `/.well-known/mcp.json`.
-* **Docker Compose** for local multi-service orchestration.
+- **Backend** (`backend/`): a FastAPI app that hosts an MCP server built with the official MCP Python SDK,
+  served over Streamable HTTP at `/mcp`, plus a REST API over the same catalog logic. Semantic search uses
+  Gemini embeddings and an in-memory vector index.
+- **Frontend** (`frontend/`): a Next.js chat app. A server-side agent loop sends your message to Gemini,
+  runs the tools Gemini asks for on the MCP server (through the official MCP TypeScript SDK), and streams
+  the answer and every tool call back to the browser.
 
-> This project shows how **Model Context Protocol principles** let you keep **domain tools** (product catalog functions) decoupled, while the **host** layers on voice input + LLM function calling + conversational AI. The backend is a reusable tool server with lightweight semantic search and RAG capabilities.
+One provider and one key: everything runs on `GEMINI_API_KEY`, and the free tier is enough (a key from a
+Google AI Studio project without billing works).
 
----
-
-## Table of Contents
-
-1. [Conceptual Overview](#conceptual-overview)  
-2. [Architecture](#architecture)  
-3. [Execution Flow](#execution-flow)  
-4. [MCP Integration Details](#mcp-integration-details)  
-5. [Gemini Function Calling Flow](#gemini-function-calling-flow)  
-6. [Whisper Speech Transcription](#whisper-speech-transcription)  
-7. [In-Memory Vector Search](#in-memory-vector-search)
-8. [RAG (Retrieval-Augmented Generation)](#rag-retrieval-augmented-generation)
-9. [Repository Structure](#repository-structure)  
-10. [Environment Variables](#environment-variables)  
-11. [Local Development](#local-development)  
-12. [Docker & Deployment](#docker--deployment)  
-13. [API Endpoints](#api-endpoints)
-14. [Extending the Catalog / Tools](#extending-the-catalog--tools)  
-15. [Security & Hardening](#security--hardening)  
-16. [Troubleshooting](#troubleshooting)  
-17. [Technology Stack](#technology-stack)
-18. [Roadmap / Future Enhancements](#roadmap--future-enhancements)  
-19. [Contributing](#contributing)  
-20. [License](#license)
-
----
-
-## Conceptual Overview
-
-| Layer | Role | Technologies | Key Responsibility |
-|-------|------|--------------|--------------------|
-| **Host (UI)** | Accept user text / voice; orchestrate LLM + tools; provide RAG interface | Next.js, TypeScript, @google/genai, Whisper | Transcribe audio → text; negotiate Gemini function calls; RAG chat interface; render results |
-| **LLM** | Natural language understanding + tool selection + conversation generation | Gemini 2.0 Flash + OpenAI GPT | Decide whether to call a tool; summarize tool output; generate conversational responses |
-| **Tool Server** | Deterministic domain functions + semantic search + RAG | FastAPI + JSON-RPC façade + LangChain + In-Memory Vector Store + OpenAI | Provide `list_products`, `search_products`, `semantic_product_search`, `rag_query` |
-| **MCP Discovery** | Tool metadata | `/.well-known/mcp.json` | Advertise schemas for dynamic functionDeclarations including RAG |
-| **Vector Store** | Semantic product embeddings | OpenAI Embeddings + In-Memory Python | Enable natural language product discovery |
-| **RAG System** | Conversational AI with product context | OpenAI GPT + Vector Search Results | Generate contextual product recommendations and explanations |
-
-**New in this version:** **RAG-powered conversational AI assistant** that combines semantic search with large language model generation for natural product consultations.
+**Live demo:** <https://mcp-voice-app.manojkumargummadi.com/>. The "How it works" page in the app
+covers the same ground as this README.
 
 ---
 
 ## Architecture
 
-**High-Level (Current):**
+```mermaid
+flowchart LR
+    B["Browser<br/>chat UI, mic, results panel"]
+    subgraph FE["Next.js (frontend/)"]
+        T["/api/transcribe"]
+        C["/api/chat<br/>NDJSON stream"]
+        A["lib/agent.ts<br/>agent loop"]
+        M["lib/mcpClient.ts<br/>MCP client"]
+        P["/api/products"]
+    end
+    subgraph BE["FastAPI (backend/)"]
+        S["/mcp<br/>MCP server"]
+        R["REST /products/*"]
+        SVC["product_service<br/>filters + vector index"]
+    end
+    G[("Gemini API")]
 
-```
-Browser (React UI)
-   │ (MediaRecorder audio)
-   ├─ POST /api/transcribe  (Next.js serverless → Whisper)
-   │
-   └─ POST /api/chat  (Gemini host logic)
-          1. Fetch & cache backend /.well-known/mcp.json
-          2. Build functionDeclarations
-          3. Gemini generateContent (mode=ANY)
-          4. If functionCall -> POST backend /mcp (JSON-RPC)
-          5. Wrap tool result as functionResponse
-          6. Gemini second call (mode=NONE)
-          7. Return { message, products? }
-Backend (FastAPI Tool Server)
-   ├─ GET /products
-   ├─ POST /products/search
-   ├─ POST /products/semantic-search  (In-Memory Vector Search)
-   ├─ POST /mcp  (JSON-RPC 2.0)
-   ├─ GET /.well-known/mcp.json
-   └─ GET /healthz
-```
-
-**Vector Store Flow:**
-```
-Startup → Load products.json → Generate embeddings → Store in-memory
-Query → Embed user query → Cosine similarity search → Return ranked products
+    B -- audio --> T -- audio --> G
+    B -- messages --> C --> A
+    A <-- "generateContentStream<br/>(function calling)" --> G
+    A --> M -- "Streamable HTTP<br/>tools/list, tools/call" --> S
+    B --> P --> R
+    S --> SVC
+    R --> SVC
+    SVC -- "embeddings" --> G
 ```
 
-**Why use in-memory vector search?**
+What happens when you ask something:
 
-* Keeps the **tool server lightweight** and Vercel-deployable under 250MB.
-* Reduces external dependencies and eliminates vector database setup.
-* Fast startup and query times with pure Python cosine similarity.
-* **Pure data tools** vs **orchestration / AI enrichment** separation.
+1. **Voice (optional).** The browser records up to 30 s with `MediaRecorder` and posts the audio to
+   `/api/transcribe`, which asks Gemini (`GEMINI_TRANSCRIBE_MODEL`) for a transcript. The transcript is sent
+   as a normal chat message.
+2. **Agent.** `/api/chat` validates the conversation and runs `runAgent()` from `src/lib/agent.ts`. It
+   connects to the MCP server, lists its tools, converts them to Gemini function declarations, and calls
+   Gemini with function calling in `AUTO` mode.
+3. **Tools.** When Gemini requests tool calls, the agent runs each one on the MCP server with `tools/call`
+   and feeds the structured results back to the model. This repeats until the model answers in plain text,
+   or until `AGENT_MAX_STEPS` is reached (the last step disables tools so the model has to answer).
+4. **Streaming.** Every text delta, tool call and tool result goes to the browser as one NDJSON line, so the
+   UI shows tool-call chips (tool name, arguments, result count) and product cards while the reply streams in.
 
----
+Details: [docs/agent.md](docs/agent.md) (agent loop and stream protocol), [docs/mcp.md](docs/mcp.md)
+(MCP server), [docs/semantic_search.md](docs/semantic_search.md) (embeddings and fallback).
 
-## Execution Flow
+## MCP server
 
-1. **User Input (Voice or Text)**  
-   * Voice: Browser records → `/api/transcribe` → Whisper → text.  
-   * Text: Directly sent to `/api/chat`.
+Endpoint: `POST /mcp` (Streamable HTTP, stateless, JSON responses). Server name: `product-catalog`.
 
-2. **Discovery**: Host fetches `/.well-known/mcp.json`, converts each tool to Gemini `functionDeclarations`.
+| Tool | Arguments | Returns |
+|------|-----------|---------|
+| `list_products` | none | Every product (`method: "catalog"`) |
+| `search_products` | `colors?`, `city?`, `min_price?`, `max_price?`, `tags?` | Exact-attribute filter, all filters ANDed (`method: "filter"`) |
+| `semantic_product_search` | `query`, `top_k` (1-50, default 5), plus the same optional filters | Results ranked by embedding similarity (`method: "semantic"`), or `"keyword_fallback"` if embeddings are unavailable |
+| `get_product` | `product_id` | One product with specs, sizes and materials; a tool error if the id doesn't exist |
 
-3. **First Gemini Call** (`mode=ANY`): Model may return answer or a `functionCall` (including semantic search).
+All four tools are annotated read-only and idempotent and declare typed input **and** output schemas, so
+results come back as `structuredContent`. The server also exposes:
 
-4. **Tool Invocation**: Host calls backend `/mcp` JSON-RPC to execute domain function or in-memory semantic search.
+- **Resource** `catalog://products`: the whole catalog as JSON.
+- **Prompt** `shopping_assistant(need)`: a starter prompt for a shopping conversation.
 
-5. **Second Gemini Call** (`mode=NONE`): Host includes `functionResponse` so Gemini composes a natural language summary.
+The REST API mirrors the tools: `GET /products`, `GET /products/{id}`, `POST /products/search`,
+`POST /products/semantic-search`. There's also `GET /` (service index), `GET /healthz` and `GET /docs`
+(Swagger UI).
 
-6. **UI Update**: Host returns `{products?, message}` → React renders product cards + summary text.
+### Connect another MCP client
 
----
-
-## MCP Integration Details
-
-| Component | Responsibility |
-|----------|----------------|
-| Backend `/.well-known/mcp.json` | Canonical tool schemas (now includes semantic search). |
-| Backend `/mcp` | JSON-RPC 2.0 payload dispatch. |
-| FastAPI functions | Implement deterministic business logic + in-memory vector search. |
-| Frontend `mcpHost.ts` | Fetch & cache discovery, generate tool declarations. |
-| Frontend `/api/chat` | Two-phase Gemini function-calling orchestration. |
-| In-Memory Store | Fast vector storage and similarity search. |
-
-> Additional hosts (CLI, Slack bot, etc.) can reuse the backend by replicating: **discover → supply tools → call JSON-RPC**.
-
----
-
-## Gemini Function Calling Flow
-
-| Phase | Input | Config Mode | Output |
-|-------|-------|-------------|--------|
-| 1 | User text + functionDeclarations | `ANY` | Optional `functionCalls[]` (list, search, or semantic) |
-| 2 | JSON-RPC tool result | — | — |
-| 3 | Conversation + `functionResponse` | `NONE` | Final natural language answer |
-
-`mode=NONE` prevents recursive calls and reduces latency.
-
-**Tool Selection Logic:**
-- **list_products**: "show all products", "what's available"
-- **search_products**: "red items under $50", "products in Portland"  
-- **semantic_product_search**: "comfortable hoodies", "warm winter clothing"
-
----
-
-## Whisper Speech Transcription
-
-| Step | Detail |
-|------|--------|
-| Recording | Browser `MediaRecorder` → `Blob` (`audio/webm`) |
-| Upload | POST `/api/transcribe` (Next.js) |
-| Transcription | `openai.audio.transcriptions.create` (`whisper-1`) |
-| Response | `{ text }` returned to UI |
-| Backend Impact | None (backend is tool-only) |
-
----
-
-## In-Memory Vector Search
-
-| Component | Technology | Purpose |
-|-----------|------------|---------|
-| **Embeddings** | OpenAI `text-embedding-ada-002` | Convert product data to vectors |
-| **Vector Store** | Pure Python in-memory | Fast similarity search with cosine similarity |
-| **Framework** | LangChain OpenAI | Embedding generation abstraction |
-| **Documents** | Product name + description + tags + city | Rich context for embeddings |
-
-**Features:**
-- **Natural Language Queries**: "comfortable black hoodie for streetwear"
-- **Similarity Scoring**: Results ranked by cosine similarity
-- **Fast Performance**: ~50ms response time (in-memory)
-- **Lightweight**: ~25MB bundle size (Vercel compatible)
-
-**Example Query Flow:**
-```
-User: "warm winter clothing"
-→ Embed query with OpenAI
-→ In-memory cosine similarity search  
-→ Return products with scores
-→ Gemini summarizes results
-```
-
-For detailed setup and configuration, see [docs/semantic_search.md](./docs/semantic_search.md).
-
----
-
-## RAG (Retrieval-Augmented Generation)
-
-| Component | Technology | Purpose |
-|-----------|------------|---------|
-| **RAG Query** | OpenAI GPT | Generate conversational responses with product context |
-| **Context Retrieval** | In-Memory Vector Search | Provide relevant product information to RAG |
-| **Framework** | LangChain + OpenAI | RAG implementation and orchestration |
-| **Documents** | Product data + embeddings | Knowledge base for RAG |
-
-**Features:**
-- **Conversational AI**: Natural language interactions about products
-- **Contextual Awareness**: Responses grounded in product data
-- **Flexible Queries**: Handle both factual and exploratory queries
-- **Efficient**: Combines retrieval and generation in one step
-
-**Example RAG Flow:**
-```
-User: "Tell me about warm winter clothing"
-→ Embed query and retrieve top products
-→ Generate response: "We have several options like X, Y, Z..."
-```
-
-For detailed setup and configuration, see [docs/rag.md](./docs/rag.md).
-
----
-
-## Repository Structure
-
-```
-root/
-├─ frontend/
-│  ├─ src/app/api/chat/route.ts        # Gemini orchestration (MCP Host)
-│  ├─ src/app/api/transcribe/route.ts  # Whisper transcription (host only)
-│  ├─ src/app/page.tsx                 # UI
-│  ├─ src/lib/mcpHost.ts               # Discovery + tool invocation helper
-│  └─ components/...
-├─ backend/
-│  ├─ main.py            # FastAPI MCP tool server (products + semantic search)
-│  ├─ data/products.json # Enhanced product catalog with descriptions
-│  ├─ prompts.yml        # discovery schemas (includes semantic search)
-│  ├─ tests/            # unit tests including semantic search
-│  ├─ pyproject.toml    # includes LangChain + OpenAI dependencies
-├─ docs/
-│  └─ semantic_search.md # semantic search documentation
-├─ docker-compose.yml
-└─ README.md
-```
-
----
-
-## Environment Variables
-
-| Variable | Needed In | Purpose |
-|----------|-----------|---------|
-| `GEMINI_API_KEY` | Frontend server runtime | Gemini model access |
-| `OPENAI_API_KEY` | Frontend server runtime + Backend startup | Whisper transcription + embeddings |
-| `BACKEND_INTERNAL_URL` | Frontend server runtime | Base URL of FastAPI tool server |
-
-> **Note:** `OPENAI_API_KEY` is needed in backend for embedding generation during startup.
-
----
-
-## Local Development
-
-### Backend
+Any MCP client that speaks Streamable HTTP can use the deployed backend:
 
 ```bash
+# Claude Code
+claude mcp add --transport http product-catalog https://<your-backend>.vercel.app/mcp
+
+# MCP Inspector (choose "Streamable HTTP" and enter the /mcp URL)
+npx @modelcontextprotocol/inspector
+```
+
+Or call it with curl:
+
+```bash
+curl -s http://localhost:8000/mcp \
+  -H 'content-type: application/json' \
+  -H 'accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+```
+
+## Tech stack
+
+| Area | Technology |
+|------|------------|
+| Frontend | Next.js 16 (App Router, Node runtime routes), React 19, TypeScript, Tailwind CSS 4, lucide-react, react-markdown |
+| Agent | `@google/genai` (Gemini function calling), `@modelcontextprotocol/sdk` (`StreamableHTTPClientTransport`), zod |
+| Voice | `MediaRecorder` in the browser, Gemini audio understanding for transcription, browser `speechSynthesis` for optional spoken replies |
+| Backend | Python 3.13, FastAPI, official MCP Python SDK (`mcp` 2.x, `MCPServer`), httpx, Pydantic |
+| Search | Gemini `gemini-embedding-001` (768 dims) over plain HTTP, in-memory cosine index, keyword fallback |
+| Tooling | pytest + anyio, ruff, mypy, ESLint 9, TypeScript `tsc` |
+| Hosting | Vercel (two projects: frontend and backend) |
+
+## Project structure
+
+```
+backend/
+  main.py                  FastAPI app: CORS, REST routers, /mcp route
+  mcp_server.py            MCP tools, resource, prompt; per-request Streamable HTTP endpoint
+  config/settings.py       Environment-driven settings
+  models/requests.py       Pydantic models shared by REST and MCP (filters, Product, ProductResults)
+  routes/                  health.py (/, /healthz), products.py (/products/*)
+  services/                product_service.py, embedding_service.py, vector_store.py
+  utils/cache.py           Cached products.json loader
+  data/products.json       The catalog
+  tests/                   pytest suite (REST, semantic search, MCP)
+frontend/src/
+  app/page.tsx             Chat page (renders ShoppingAgent)
+  app/about/page.tsx       "How it works" page
+  app/api/chat/            Agent endpoint, streams NDJSON
+  app/api/transcribe/      Speech-to-text with Gemini
+  app/api/products/        Catalog proxy for the browse panel
+  components/              ShoppingAgent, ChatMessage, ToolCallChip, ProductCard
+  lib/                     agent.ts, mcpClient.ts, chatTypes.ts, config.ts, errors.ts, useChat, useRecorder, speech
+docs/                      agent.md, mcp.md, semantic_search.md
+scripts/test_mcp.js        Smoke test for a running MCP endpoint (no dependencies)
+```
+
+## Environment variables
+
+Both packages ship a `.env.example` to copy.
+
+**Frontend** (`frontend/.env.local`, or the Vercel project settings):
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `GEMINI_API_KEY` | required | Chat agent and transcription |
+| `GEMINI_MODEL` | `gemini-flash-latest` | Agent model |
+| `GEMINI_TRANSCRIBE_MODEL` | `gemini-flash-lite-latest` | Speech-to-text model |
+| `GEMINI_THINKING_LEVEL` | `low` | How much the chat model reasons first: `minimal`/`low`/`medium`/`high`; empty = model default |
+| `BACKEND_INTERNAL_URL` | `http://localhost:8000` | Backend base URL; the agent connects to `${BACKEND_INTERNAL_URL}/mcp` |
+| `AGENT_MAX_STEPS` | `5` | Maximum model calls per message |
+| `RATE_LIMIT_CHAT` | `20/600` | Chat messages per visitor IP per window (`max/seconds`; `0/1` disables) |
+| `RATE_LIMIT_CHAT_GLOBAL` | `300/3600` | Chat messages site-wide per server instance |
+| `RATE_LIMIT_TRANSCRIBE` | `15/600` | Voice transcriptions per visitor IP per window |
+| `RATE_LIMIT_TRANSCRIBE_GLOBAL` | `200/3600` | Voice transcriptions site-wide per server instance |
+| `GEMINI_BASE_URL` | unset | Optional Gemini API base URL override (a proxy, or a local mock) |
+
+**Backend** (`backend/.env`, or the Vercel project settings):
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `GEMINI_API_KEY` | unset | Embeddings for semantic search. Without it, semantic search uses keyword matching |
+| `EMBEDDING_MODEL` | `gemini-embedding-001` | Embedding model |
+| `EMBEDDING_DIMENSIONS` | `768` | Output dimensionality |
+| `EMBEDDING_TIMEOUT_S` | `30` | HTTP timeout for embedding calls |
+| `EMBEDDING_QUERY_BUDGET_PER_HOUR` | `600` | New (paid) query embeddings per hour per process; over it, search uses keyword matching. `0` = unlimited |
+| `EMBEDDING_QUERY_CACHE_SIZE` | `512` | Recent query embeddings kept in memory (repeat searches are free) |
+| `GEMINI_API_BASE` | `https://generativelanguage.googleapis.com/v1beta` | Gemini REST base URL |
+| `SEMANTIC_DEFAULT_TOP_K` | `5` | Used when a request sends `top_k: null` |
+| `SEMANTIC_MIN_SIMILARITY` | `0.0` | Drop semantic results below this cosine similarity |
+| `ALLOWED_ORIGINS` | `http://localhost:3000` | Comma-separated CORS origins (browsers only; the frontend calls the backend server-side) |
+
+Model names are all configurable, so when a provider retires a model you change a setting, not code.
+
+## Local development
+
+Prerequisites: Python 3.13, Node.js 20.9 or later, and a Gemini API key.
+
+```bash
+# Backend: http://localhost:8000 (MCP at /mcp, Swagger at /docs)
 cd backend
-poetry install
-# In-memory vector store will auto-initialize on first startup
-OPENAI_API_KEY=your_openai_key uvicorn main:app --reload --port 8000
+python3.13 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env            # then set GEMINI_API_KEY
+uvicorn main:app --reload --port 8000
 ```
 
-### Frontend
-
 ```bash
+# Frontend: http://localhost:3000
 cd frontend
-npm install   # or pnpm install
-BACKEND_INTERNAL_URL=http://localhost:8000 \
-GEMINI_API_KEY=your_gemini_key \
-OPENAI_API_KEY=your_openai_key \
+npm ci
+cp .env.example .env.local      # then set GEMINI_API_KEY
 npm run dev
 ```
 
-Open: http://localhost:3000
+`requirements.txt` has the runtime dependencies only. For the dev tools, run
+`pip install -r requirements-dev.txt` or use Poetry (`poetry install`), which reads `pyproject.toml`.
 
-### Testing Semantic Search
-
-```bash
-cd backend
-poetry run pytest tests/test_semantic_search.py -v
-```
-
-### Docker
+### Docker Compose
 
 ```bash
-docker compose up --build
-# Frontend: http://localhost:3000
-# Backend:  http://localhost:8000
+GEMINI_API_KEY=your-key docker compose up --build
 ```
 
----
+This builds both images and starts the backend on port 8000 and the frontend on port 3000, with the
+frontend pointed at `http://backend:8000`. Compose also reads `GEMINI_API_KEY` from a `.env` file in the
+repo root.
 
-## Docker & Deployment
+## Tests and checks
 
-| Service | Notes |
-|---------|-------|
-| Backend (FastAPI) | Stateless; horizontally scalable; can be reused by many hosts. Includes in-memory vector store. |
-| Frontend (Next.js) | Deployed to Vercel; provides `/api/chat` + `/api/transcribe`. |
-| Separation | Clean host/tool divide; easier migration to additional hosts. |
-| Vector Store | In-memory vectors rebuild on startup; fast initialization. |
-
----
-
-## API Endpoints
-
-### Backend (FastAPI Tool Server)
-
-| Method | Endpoint | Description | Content-Type |
-|--------|----------|-------------|--------------|
-| `GET` | `/` | Service index and documentation | `application/json` |
-| `GET` | `/products` | List all products | `application/json` |
-| `POST` | `/products/search` | Filter products by criteria | `application/json` |
-| `POST` | `/products/semantic-search` | Natural language product search | `application/json` |
-| `POST` | `/mcp` | **JSON-RPC 2.0 endpoint for MCP tools** | `application/json` |
-| `GET` | `/.well-known/mcp.json` | MCP tool discovery | `application/json` |
-| `GET` | `/healthz` | Health check | `application/json` |
-| `GET` | `/docs` | Interactive API documentation | `text/html` |
-
-### MCP JSON-RPC Methods
-
-The `/mcp` endpoint accepts JSON-RPC 2.0 requests with these methods:
-
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "list_products",
-  "params": {},
-  "id": 1
-}
-```
-
-**Available Methods:**
-- `list_products`: Get all products (no parameters)
-- `search_products`: Filter by `colors`, `city`, `min_price`, `max_price`
-- `semantic_product_search`: Search by natural language `query` and optional `top_k`
-- `rag_query`: Conversational query with context retrieval
-
-### Frontend (Next.js Host)
-
-| Method | Endpoint | Description | Content-Type |
-|--------|----------|-------------|--------------|
-| `POST` | `/api/chat` | Gemini orchestration with tool calling | `application/json` |
-| `POST` | `/api/transcribe` | Whisper speech-to-text | `multipart/form-data` |
-
-**Example MCP Tool Call:**
 ```bash
-curl -X POST http://localhost:8000/mcp \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "method": "semantic_product_search",
-    "params": {"query": "comfortable black hoodie", "top_k": 3},
-    "id": 1
-  }'
+# backend/
+pytest          # REST, semantic search (fake embedder), MCP via the official client and raw HTTP
+ruff check .
+mypy .
+
+# frontend/
+npm run lint
+npm run typecheck
+npm run build
+
+# against a running backend (defaults to http://localhost:8000)
+BACKEND_URL=https://<your-backend>.vercel.app node scripts/test_mcp.js
 ```
 
----
+The backend tests never call Gemini: `conftest.py` removes `GEMINI_API_KEY`, and the ranking tests use a
+deterministic fake embedder.
 
-## Extending the Catalog / Tools
+## Cost protection
 
-1. Add Python function (e.g. `get_product_reviews`).
-2. Register in `/mcp` method mapping.
-3. Add schema entry to `prompts.yml` under `mcp_discovery.tools`.
-4. **For semantic search**: Update product descriptions and restart backend.
-5. Redeploy backend.
-6. Host auto-discovers new tool; prompt Gemini to use it.
+The site is public and every chat turn spends Gemini credits, so:
 
-**Vector Store Refresh:**
-```bash
-# Simply restart backend to rebuild in-memory embeddings
-poetry run uvicorn main:app --reload
-```
+- `/api/chat` and `/api/transcribe` limit requests per visitor IP and site-wide (friendly 429 with `Retry-After`).
+- The backend caches query embeddings and caps new ones per hour, falling back to free keyword search over the cap.
+- Each chat turn is bounded: at most `AGENT_MAX_STEPS` model calls, 30 history turns, 4,000 characters per message.
 
-**Tip:** Provide clear, discriminative descriptions so the model selects the correct tool.
+Limits are kept in memory per server instance (no extra services). That's enough to stop casual abuse; for strict
+global limits, back `frontend/src/lib/rateLimit.ts` with a shared store such as Upstash Redis. Also set a budget
+alert on the Google Cloud billing account.
 
----
+## Deployment
 
-## Security & Hardening
+The app runs as two Vercel projects in this repo:
 
-| Concern | Mitigation |
-|---------|-----------|
-| Secret leakage | Server-only env vars; no `NEXT_PUBLIC_*` secrets. |
-| Overbroad CORS | Limit `ALLOWED_ORIGINS` in backend. |
-| Tool misuse | Use `allowedFunctionNames` in production if needed. |
-| Large responses | Add pagination to `search_products` and semantic search. |
-| Rate abuse (transcribe) | Add simple rate limiting or auth token at host. |
-| Prompt injection via tool data | Sanitize product inputs before storing. |
-| In-memory data access | Secure server access and environment variables. |
-| Embedding costs | Monitor OpenAI API usage for embedding generation. |
+1. **Backend**, root directory `backend/`. `vercel.json` builds `main.py` with `@vercel/python` and routes
+   every path to it. Set `GEMINI_API_KEY`, plus `ALLOWED_ORIGINS` if browsers will call the API directly.
+2. **Frontend**, root directory `frontend/` (Next.js preset). Set `GEMINI_API_KEY` and
+   `BACKEND_INTERNAL_URL` (the backend's public URL, without `/mcp`). The other variables are optional.
 
----
-
-## Troubleshooting
-
-| Symptom | Cause | Fix |
-|---------|-------|-----|
-| `BACKEND_INTERNAL_URL not defined` | Missing env during build/runtime | Add to deployment env & rebuild |
-| No `functionCalls` | Model didn't see need for tools | Strengthen tool descriptions / user prompt |
-| 500 in transcription | Missing or invalid `OPENAI_API_KEY` | Set correct key & redeploy |
-| Case-sensitive city filter | Old backend version | Redeploy updated backend |
-| CORS errors | Origin mismatch | Update backend `ALLOWED_ORIGINS` |
-| `Vector store not initialized` | Missing `OPENAI_API_KEY` in backend | Set key in backend environment |
-| Poor semantic search results | Weak product descriptions | Enhance product data & restart backend |
-| Slow semantic search | Large vector store or inefficient similarity | Optimize in-memory search or add caching |
-| **405 Method Not Allowed on `/mcp`** | Incorrect HTTP method or CORS issue | Ensure POST method, check CORS headers |
-
----
-
-## Technology Stack
-
-### Frontend (MCP Host)
-| Technology | Version | Purpose |
-|------------|---------|---------|
-| **Next.js** | 14.x | React framework with serverless API routes |
-| **React** | 18.x | UI components and state management |
-| **TypeScript** | 5.x | Type safety and developer experience |
-| **@google/genai** | Latest | Google Gemini 2.0 Flash API client |
-| **Tailwind CSS** | 3.x | Utility-first styling |
-| **OpenAI API** | 4.x | Whisper speech-to-text transcription |
-
-### Backend (MCP Tool Server)
-| Technology | Version | Purpose |
-|------------|---------|---------|
-| **FastAPI** | 0.116.x | High-performance async Python web framework |
-| **Python** | 3.13 | Runtime environment |
-| **Pydantic** | 2.x | Data validation and serialization |
-| **LangChain** | 0.2.x | Framework for LLM applications |
-| **LangChain OpenAI** | 0.1.x | OpenAI-specific LangChain components |
-| **OpenAI Embeddings** | Via LangChain | Text embedding generation |
-| **PyYAML** | 6.x | Configuration file parsing |
-| **Python-dotenv** | 1.x | Environment variable management |
-| **Uvicorn** | 0.35.x | ASGI server |
-
-### DevOps & Infrastructure
-| Technology | Version | Purpose |
-|------------|---------|---------|
-| **Docker** | Latest | Containerization |
-| **Docker Compose** | Latest | Multi-service orchestration |
-| **Poetry** | 1.8.x | Python dependency management |
-| **npm/pnpm** | Latest | Node.js package management |
-
-### AI & ML Services
-| Service | Model | Purpose |
-|---------|-------|---------|
-| **Google Gemini** | 2.0 Flash | Function calling and natural language understanding |
-| **OpenAI Whisper** | whisper-1 | Speech-to-text transcription |
-| **OpenAI Embeddings** | text-embedding-ada-002 | Vector embeddings for semantic search |
-| **OpenAI GPT** | gpt-3.5-turbo | Conversational AI and RAG |
-
-### Protocols & Standards
-| Protocol | Purpose |
-|----------|---------|
-| **JSON-RPC 2.0** | Tool invocation protocol |
-| **Model Context Protocol (MCP)** | Tool discovery and metadata |
-| **HTTP/REST** | API communication |
-| **WebRTC/MediaRecorder** | Browser audio recording |
-
----
-
-## Roadmap / Future Enhancements
-
-| Area | Idea |
-|------|------|
-| ~~Retrieval~~ | ~~Add vector search tool.~~ ✅ **COMPLETED** |
-| Streaming | Use `generateContentStream` for progressive answers. |
-| Observability | Integrate OpenTelemetry traces. |
-| Auth | JWT or API keys for tool calls. |
-| TTS | Add speech synthesis for responses. |
-| Multi-host | CLI or Slack bot reusing same backend. |
-| Pagination | Add `limit/offset` to tool responses and semantic search. |
-| Analytics | Persist tool call metrics dashboards. |
-| Advanced RAG | Add metadata filtering to semantic search. |
-| Hybrid Search | Combine keyword and semantic search results. |
-| External Vector DB | Optional ChromaDB/Pinecone for larger datasets. |
-
----
-
-## Contributing
-
-1. Fork & branch `feature/<name>`.
-2. Implement tool + schema.
-3. Add tests for new functionality.
-4. Lint & test:
-   ```bash
-   poetry run pytest
-   npm run lint
-   ```
-5. PR with example prompt + output.
-
----
+The MCP endpoint creates a fresh stateless session manager for every request, so it doesn't depend on
+lifespan events or in-memory sessions surviving between serverless invocations. The vector index is built
+lazily on the first semantic search in each warm instance.
 
 ## License
 
 MIT
-
----
-
-**Questions / Ideas?** Open an issue.  
-Enjoy building with **MCP + Gemini + Whisper + In-Memory Vector Search** 🚀

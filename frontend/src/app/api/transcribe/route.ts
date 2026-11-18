@@ -1,123 +1,59 @@
+import { config } from "../../../lib/config";
+import { describeError } from "../../../lib/errors";
+import { gemini } from "../../../lib/gemini";
+import { enforceLimits, parseLimit } from "../../../lib/rateLimit";
+
 export const runtime = "nodejs";
+export const maxDuration = 30;
 
-import { NextResponse } from "next/server";
-import OpenAI from "openai";
+const MAX_BYTES = 8 * 1024 * 1024;
 
-const MAX_FILE_MB = 5;
-const MAX_BYTES = MAX_FILE_MB * 1024 * 1024;
-const ACCEPT_MIME_PREFIXES = ["audio/", "video/webm"];
-const DEFAULT_MODEL = process.env.WHISPER_MODEL ?? "whisper-1";
+const PROMPT =
+  "Transcribe the speech in this audio exactly as spoken, in the speaker's language. " +
+  "Return only the transcript, with no quotes, labels or commentary. " +
+  "If there is no intelligible speech, return an empty response.";
 
-interface LogRecord {
-  evt: string;
-  [k: string]: unknown;
-}
-
-function log(rec: LogRecord) {
-  console.log(JSON.stringify(rec));
-}
-
-interface ErrorPayload {
-  error: string;
-  code: string;
-  detail?: string;
-  latency_ms: number;
-}
-
-function errorJSON(
-  status: number,
-  code: string,
-  message: string,
-  t0: number,
-  detail?: string,
-  extra?: Record<string, unknown>
-) {
-  const latency = Date.now() - t0;
-  const payload: ErrorPayload = { error: message, code, detail, latency_ms: latency };
-  log({ evt: "transcribe_error", code, message, detail, latency_ms: latency, ...extra });
-  return NextResponse.json(payload, { status });
-}
-
+/** Speech-to-text with Gemini's native audio understanding (replaces Whisper). */
 export async function POST(req: Request) {
   const t0 = Date.now();
-  const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+  if (!config.geminiApiKey) {
+    return Response.json({ code: "config_error", message: "Server is missing GEMINI_API_KEY" }, { status: 500 });
+  }
 
-  if (!OPENAI_API_KEY) {
-    return errorJSON(500, "CONFIG_ERROR", "OPENAI_API_KEY not configured on server", t0);
+  const limited = enforceLimits(
+    req,
+    "transcribe",
+    parseLimit(config.limits.transcribePerVisitor, { max: 15, windowMs: 600_000 }),
+    parseLimit(config.limits.transcribeGlobal, { max: 200, windowMs: 3_600_000 }),
+  );
+  if (limited) return limited;
+
+  const form = await req.formData().catch(() => null);
+  const file = form?.get("file");
+  if (!(file instanceof Blob) || file.size === 0) {
+    return Response.json({ code: "no_audio", message: "No audio received" }, { status: 400 });
+  }
+  if (file.size > MAX_BYTES) {
+    return Response.json({ code: "too_large", message: "Recording is too long" }, { status: 413 });
+  }
+  const mimeType = (file.type || "audio/webm").split(";")[0];
+  if (!mimeType.startsWith("audio/") && mimeType !== "video/webm") {
+    return Response.json({ code: "unsupported_type", message: `Unsupported audio type ${mimeType}` }, { status: 415 });
   }
 
   try {
-    const formData = await req.formData();
-    const uploaded = formData.get("file");
-
-    if (!uploaded || !(uploaded instanceof Blob)) {
-      return errorJSON(422, "NO_FILE", "No file uploaded", t0);
-    }
-
-    if (uploaded.size === 0) {
-      return errorJSON(400, "EMPTY_FILE", "Uploaded file is empty", t0);
-    }
-
-    if (uploaded.size > MAX_BYTES) {
-      return errorJSON(
-        413,
-        "FILE_TOO_LARGE",
-        `File exceeds ${MAX_FILE_MB}MB (received ${(uploaded.size / 1_048_576).toFixed(2)}MB)`,
-        t0
-      );
-    }
-
-    const mime = uploaded.type || "application/octet-stream";
-    const mimeAllowed = ACCEPT_MIME_PREFIXES.some((p) => mime.startsWith(p));
-    if (!mimeAllowed) {
-      return errorJSON(415, "UNSUPPORTED_MEDIA_TYPE", `Unsupported media type: ${mime}`, t0);
-    }
-
-    const url = new URL(req.url);
-    const language = url.searchParams.get("lang") || undefined;
-
-    const filename =
-      (uploaded as File).name ||
-      `audio.${mime.includes("webm") ? "webm" : (mime.split("/")[1] ?? "dat")}`;
-    const arrayBuffer = await uploaded.arrayBuffer();
-    const fileForOpenAI = new File([arrayBuffer], filename, { type: mime });
-
-    const client = new OpenAI({ apiKey: OPENAI_API_KEY });
-
-    const resp = await client.audio.transcriptions.create({
-      model: DEFAULT_MODEL,
-      file: fileForOpenAI,
-      response_format: "text",
-      language,
+    const data = Buffer.from(await file.arrayBuffer()).toString("base64");
+    const result = await gemini().models.generateContent({
+      model: config.transcribeModel,
+      contents: [{ role: "user", parts: [{ inlineData: { mimeType, data } }, { text: PROMPT }] }],
+      config: { temperature: 0 },
     });
-
-    const text =
-      typeof resp === "string"
-        ? resp
-        : (resp as { text?: string }).text ?? JSON.stringify(resp);
-
-    const latency = Date.now() - t0;
-    log({
-      evt: "transcribe_complete",
-      filename,
-      size_bytes: uploaded.size,
-      mime,
-      model: DEFAULT_MODEL,
-      char_count: text.length,
-      language,
-      latency_ms: latency,
-    });
-
-    return NextResponse.json({
-      text,
-      filename,
-      bytes: uploaded.size,
-      model: DEFAULT_MODEL,
-      latency_ms: latency,
-      language,
-    });
+    const text = (result.text ?? "").trim();
+    console.log(JSON.stringify({ evt: "transcribe", bytes: file.size, chars: text.length, latency_ms: Date.now() - t0 }));
+    return Response.json({ text, model: config.transcribeModel, latency_ms: Date.now() - t0 });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return errorJSON(500, "TRANSCRIBE_FAIL", "Transcription failed", t0, msg);
+    const { code, message, status } = describeError(err);
+    console.error(JSON.stringify({ evt: "transcribe_error", code, detail: String(err).slice(0, 500) }));
+    return Response.json({ code, message }, { status });
   }
 }

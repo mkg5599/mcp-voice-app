@@ -1,36 +1,38 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Frontend: voice shopping agent
 
-## Getting Started
+Next.js 16 (App Router), React 19, Tailwind CSS 4. One chat page backed by a server-side agent that calls
+the backend's MCP tools through Gemini function calling.
 
-First, run the development server:
+| Route | What it does |
+|-------|--------------|
+| `/` | Chat UI: text or voice input, tool-call chips, product results |
+| `/about` | "How it works" page |
+| `POST /api/chat` | Runs the agent loop and streams NDJSON events |
+| `POST /api/transcribe` | Speech-to-text with Gemini audio understanding |
+| `GET /api/products` | Proxies the backend catalog for the browse panel |
+
+Key files: `src/lib/agent.ts` (agent loop), `src/lib/mcpClient.ts` (MCP client and schema conversion),
+`src/lib/chatTypes.ts` (stream events), `src/lib/useChat.ts` (stream reader),
+`src/components/ShoppingAgent.tsx` (UI).
+
+## Run
 
 ```bash
+npm ci
+cp .env.example .env.local   # then set GEMINI_API_KEY
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Optional: `GEMINI_MODEL` (default `gemini-flash-latest`), `GEMINI_TRANSCRIBE_MODEL` (default
+`gemini-flash-lite-latest`), `GEMINI_THINKING_LEVEL` (default `low`), `AGENT_MAX_STEPS` (default `5`), `GEMINI_BASE_URL` (API base URL override).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Check
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run lint
+npm run typecheck
+npm run build
+```
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+See the [root README](../README.md) for architecture and deployment, and [docs/agent.md](../docs/agent.md)
+for the agent loop and stream format.

@@ -1,58 +1,30 @@
-"""Product REST endpoints."""
-from typing import Optional
+"""Plain REST endpoints over the same catalog logic the MCP tools use."""
 from fastapi import APIRouter, HTTPException
-from models.requests import ProductSearch, SemanticSearch, RagRequest
-from services.product_service import ProductService
-from services.vector_store import InMemoryVectorStore
+
+from models.requests import Product, ProductResults, ProductSearch, SemanticSearch
+from services.product_service import product_service
 
 router = APIRouter(prefix="/products", tags=["Products"])
 
-# Global instances (will be injected from main.py)
-product_service: Optional[ProductService] = None
 
-def init_product_routes(vector_store: InMemoryVectorStore) -> None:
-    """Initialize product routes with dependencies."""
-    global product_service
-    product_service = ProductService(vector_store)
-    print(f"Product routes initialized with product_service: {product_service is not None}")
+@router.get("", response_model=ProductResults)
+def list_products() -> ProductResults:
+    return product_service.list_products()
 
-def get_product_service() -> ProductService:
-    """Get the product service instance with proper error handling."""
-    if product_service is None:
-        raise HTTPException(
-            status_code=500,
-            detail="Product service not initialized. Application startup may have failed."
-        )
-    return product_service
 
-@router.get("/")
-def list_products():
-    """List all products in the catalog."""
-    service = get_product_service()
-    return service.list_products()
+@router.post("/search", response_model=ProductResults)
+def search_products(params: ProductSearch) -> ProductResults:
+    return product_service.search_products(params)
 
-@router.post("/search")
-def search_products(search_params: ProductSearch):
-    """Search products by filters (colors, city, price range)."""
-    service = get_product_service()
-    return service.search_products(search_params)
 
-@router.post("/semantic-search")
-async def semantic_search(search_params: SemanticSearch):
-    """Perform semantic search using in-memory vector store + OpenAI embeddings."""
-    service = get_product_service()
-    return await service.semantic_search(search_params)
+@router.post("/semantic-search", response_model=ProductResults)
+async def semantic_search(params: SemanticSearch) -> ProductResults:
+    return await product_service.semantic_search(params)
 
-@router.post("/rag")
-async def rag_query(rag_params: RagRequest):
-    """Perform RAG query: retrieve relevant products and generate AI response."""
-    service = get_product_service()
-    return await service.rag_query(rag_params)
 
-@router.get("/health")
-def products_health():
-    """Health check specifically for products service."""
-    return {
-        "service_initialized": product_service is not None,
-        "products_available": len(product_service.list_products()) if product_service else 0
-    }
+@router.get("/{product_id}", response_model=Product)
+def get_product(product_id: int) -> Product:
+    product = product_service.get_product(product_id)
+    if product is None:
+        raise HTTPException(status_code=404, detail=f"No product with id {product_id}")
+    return Product(**product)

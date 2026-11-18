@@ -1,93 +1,54 @@
-name: CI/CD
+name: CI
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
-    branches:
-      - main
+    branches: [main]
 
 jobs:
-  build-and-test:
+  backend:
     runs-on: ubuntu-latest
-
+    defaults:
+      run:
+        working-directory: backend
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+      - name: Install
+        run: pip install -r requirements-dev.txt
+      - name: Lint
+        run: ruff check .
+      - name: Type check
+        run: mypy .
+      - name: Test
+        run: pytest -q
 
-    - name: Set up Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build
 
-    - name: Set up pnpm
-      uses: pnpm/action-setup@v3
-      with:
-        version: 8
-        run_install: false
-
-    - name: Get pnpm store directory
-      shell: bash
-      run: |
-        echo "PNPM_CACHE_DIR=$(pnpm store path)" >> $GITHUB_ENV
-
-    - uses: actions/cache@v4
-      name: Setup pnpm cache
-      with:
-        path: ${{ env.PNPM_CACHE_DIR }}
-        key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
-        restore-keys: |
-          ${{ runner.os }}-pnpm-
-
-    - name: Install Frontend Dependencies
-      run: pnpm install --no-frozen-lockfile
-      working-directory: frontend
-
-    - name: Frontend Lint
-      run: pnpm lint
-      working-directory: frontend
-
-    - name: Frontend Type Check and Build
-      env:
-        BACKEND_INTERNAL_URL: "placeholder_backend_url"  # <-- add this secret in vercel
-        GEMINI_API_KEY: "placeholder_gemini_api_key"  # <-- add this secret in vercel
-        OPENAI_API_KEY: "placeholder_openai_api_key"  # <-- add this secret in vercel
-      run: pnpm build
-      working-directory: frontend
-
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.13'
-
-    - name: Install Poetry
-      run: pip install poetry
-
-    - name: Install Backend Dependencies
-      run: poetry install --no-root
-      working-directory: backend
-
-    - name: Backend Lint (Ruff)
-      run: poetry run ruff check .
-      working-directory: backend
-
-    - name: Backend Type Check (Mypy)
-      run: poetry run mypy .
-      working-directory: backend
-
-    - name: Backend Tests (Pytest)
-      run: poetry run pytest
-      working-directory: backend
-
-    - name: Install Docker Compose
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y docker-compose
-
-    - name: Build Docker Images
-      env:
-        GEMINI_API_KEY: 'placeholder_gemini_api_key'  # <-- add this secret in vercel
-        OPENAI_API_KEY: 'placeholder_openai_api_key'  # <-- add this secret in vercel
-        BACKEND_INTERNAL_URL: "placeholder_backend_url"  # <-- add this secret in vercel
-      run: docker-compose -f docker-compose.yml build
+  docker:
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build images
+        run: docker compose build
