@@ -55,7 +55,7 @@ GEMINI_API_KEY=your-key docker compose up --build
 ## 3. Optional checks
 
 ```bash
-# backend/ (dev tools: pip install pytest anyio ruff mypy, or poetry install)
+# backend/ (dev tools: pip install -r requirements-dev.txt, or poetry install)
 pytest && ruff check . && mypy .
 
 # frontend/

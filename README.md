@@ -202,7 +202,7 @@ npm run dev
 ```
 
 `requirements.txt` has the runtime dependencies only. For the dev tools, run
-`pip install pytest anyio ruff mypy` or use Poetry (`poetry install`), which reads `pyproject.toml`.
+`pip install -r requirements-dev.txt` or use Poetry (`poetry install`), which reads `pyproject.toml`.
 
 ### Docker Compose
 

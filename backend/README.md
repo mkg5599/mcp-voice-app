@@ -23,7 +23,7 @@ uvicorn main:app --reload --port 8000
 ## Check
 
 ```bash
-pip install pytest anyio ruff mypy   # or: poetry install
+pip install -r requirements-dev.txt   # or: poetry install
 pytest
 ruff check .
 mypy .
