@@ -22,6 +22,10 @@ GEMINI_API_BASE = os.getenv("GEMINI_API_BASE", "https://generativelanguage.googl
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "gemini-embedding-001")
 EMBEDDING_DIMENSIONS = int(os.getenv("EMBEDDING_DIMENSIONS", "768"))
 EMBEDDING_TIMEOUT_S = float(os.getenv("EMBEDDING_TIMEOUT_S", "30"))
+# Cost guards for the public endpoints: new query embeddings per hour per process (0 = unlimited)
+# and how many recent query embeddings to cache.
+EMBEDDING_QUERY_BUDGET_PER_HOUR = int(os.getenv("EMBEDDING_QUERY_BUDGET_PER_HOUR", "600"))
+EMBEDDING_QUERY_CACHE_SIZE = int(os.getenv("EMBEDDING_QUERY_CACHE_SIZE", "512"))
 
 # Semantic search
 SEMANTIC_DEFAULT_TOP_K = int(os.getenv("SEMANTIC_DEFAULT_TOP_K", "5"))

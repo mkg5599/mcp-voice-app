@@ -3,6 +3,7 @@ import { runAgent } from "../../../lib/agent";
 import { LIMITS, type ChatEvent } from "../../../lib/chatTypes";
 import { config } from "../../../lib/config";
 import { describeError } from "../../../lib/errors";
+import { enforceLimits, parseLimit } from "../../../lib/rateLimit";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -28,6 +29,14 @@ export async function POST(req: Request) {
   if (!config.geminiApiKey) {
     return Response.json({ code: "config_error", message: "Server is missing GEMINI_API_KEY" }, { status: 500 });
   }
+
+  const limited = enforceLimits(
+    req,
+    "chat",
+    parseLimit(config.limits.chatPerVisitor, { max: 20, windowMs: 600_000 }),
+    parseLimit(config.limits.chatGlobal, { max: 300, windowMs: 3_600_000 }),
+  );
+  if (limited) return limited;
 
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {

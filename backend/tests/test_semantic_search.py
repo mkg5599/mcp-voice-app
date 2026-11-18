@@ -82,3 +82,32 @@ async def test_network_errors_fall_back_to_keywords(monkeypatch):
     r = await service.semantic_search(SemanticSearch(query="hoodie", top_k=2))
     assert r.method == "keyword_fallback"
     assert "ConnectTimeout" in (service.index_error or "")
+
+
+class CountingEmbeddings(EmbeddingService):
+    """Real EmbeddingService caching/budget logic, with the HTTP call stubbed out."""
+
+    def __init__(self, budget: int) -> None:
+        super().__init__(api_key="test", model="fake", query_budget_per_hour=budget, query_cache_size=2)
+        self.http_calls = 0
+
+    async def _batch_embed(self, texts, task_type):  # type: ignore[override]
+        self.http_calls += 1
+        return [[1.0, float(len(t))] for t in texts]
+
+
+async def test_repeated_queries_are_cached():
+    e = CountingEmbeddings(budget=10)
+    await e.embed_query("Warm Jacket")
+    await e.embed_query("  warm   jacket ")
+    assert e.http_calls == 1
+
+
+async def test_query_budget_caps_paid_calls():
+    e = CountingEmbeddings(budget=2)
+    await e.embed_query("a")
+    await e.embed_query("b")
+    with pytest.raises(EmbeddingError, match="budget"):
+        await e.embed_query("c")
+    await e.embed_query("b")  # cached queries still work over budget
+    assert e.http_calls == 2

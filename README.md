@@ -157,6 +157,10 @@ Both packages ship a `.env.example` to copy.
 | `GEMINI_THINKING_LEVEL` | `low` | How much the chat model reasons first: `minimal`/`low`/`medium`/`high`; empty = model default |
 | `BACKEND_INTERNAL_URL` | `http://localhost:8000` | Backend base URL; the agent connects to `${BACKEND_INTERNAL_URL}/mcp` |
 | `AGENT_MAX_STEPS` | `5` | Maximum model calls per message |
+| `RATE_LIMIT_CHAT` | `20/600` | Chat messages per visitor IP per window (`max/seconds`; `0/1` disables) |
+| `RATE_LIMIT_CHAT_GLOBAL` | `300/3600` | Chat messages site-wide per server instance |
+| `RATE_LIMIT_TRANSCRIBE` | `15/600` | Voice transcriptions per visitor IP per window |
+| `RATE_LIMIT_TRANSCRIBE_GLOBAL` | `200/3600` | Voice transcriptions site-wide per server instance |
 | `GEMINI_BASE_URL` | unset | Optional Gemini API base URL override (a proxy, or a local mock) |
 
 **Backend** (`backend/.env`, or the Vercel project settings):
@@ -167,6 +171,8 @@ Both packages ship a `.env.example` to copy.
 | `EMBEDDING_MODEL` | `gemini-embedding-001` | Embedding model |
 | `EMBEDDING_DIMENSIONS` | `768` | Output dimensionality |
 | `EMBEDDING_TIMEOUT_S` | `30` | HTTP timeout for embedding calls |
+| `EMBEDDING_QUERY_BUDGET_PER_HOUR` | `600` | New (paid) query embeddings per hour per process; over it, search uses keyword matching. `0` = unlimited |
+| `EMBEDDING_QUERY_CACHE_SIZE` | `512` | Recent query embeddings kept in memory (repeat searches are free) |
 | `GEMINI_API_BASE` | `https://generativelanguage.googleapis.com/v1beta` | Gemini REST base URL |
 | `SEMANTIC_DEFAULT_TOP_K` | `5` | Used when a request sends `top_k: null` |
 | `SEMANTIC_MIN_SIMILARITY` | `0.0` | Drop semantic results below this cosine similarity |
@@ -227,6 +233,18 @@ BACKEND_URL=https://<your-backend>.vercel.app node scripts/test_mcp.js
 
 The backend tests never call Gemini: `conftest.py` removes `GEMINI_API_KEY`, and the ranking tests use a
 deterministic fake embedder.
+
+## Cost protection
+
+The site is public and every chat turn spends Gemini credits, so:
+
+- `/api/chat` and `/api/transcribe` limit requests per visitor IP and site-wide (friendly 429 with `Retry-After`).
+- The backend caches query embeddings and caps new ones per hour, falling back to free keyword search over the cap.
+- Each chat turn is bounded: at most `AGENT_MAX_STEPS` model calls, 30 history turns, 4,000 characters per message.
+
+Limits are kept in memory per server instance (no extra services). That's enough to stop casual abuse; for strict
+global limits, back `frontend/src/lib/rateLimit.ts` with a shared store such as Upstash Redis. Also set a budget
+alert on the Google Cloud billing account.
 
 ## Deployment
 

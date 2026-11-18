@@ -6,6 +6,10 @@ A rebuild around the official MCP SDKs, a multi-step agent, and a single AI prov
 
 ### Added
 
+- Cost protection for the public site: per-visitor and site-wide rate limits on `/api/chat` and `/api/transcribe`
+  (`RATE_LIMIT_*`), plus a query-embedding cache and hourly embedding budget on the backend
+  (`EMBEDDING_QUERY_BUDGET_PER_HOUR`, `EMBEDDING_QUERY_CACHE_SIZE`) that falls back to keyword search.
+- `GEMINI_THINKING_LEVEL` (default `low`) to trade reasoning depth for speed.
 - A standards-compliant MCP server built with the official MCP Python SDK (`MCPServer`), served over
   Streamable HTTP at `/mcp` in stateless JSON mode, with a fresh session manager per request so it runs on
   Vercel serverless functions.

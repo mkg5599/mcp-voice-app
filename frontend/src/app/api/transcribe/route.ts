@@ -1,6 +1,7 @@
 import { config } from "../../../lib/config";
 import { describeError } from "../../../lib/errors";
 import { gemini } from "../../../lib/gemini";
+import { enforceLimits, parseLimit } from "../../../lib/rateLimit";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -18,6 +19,14 @@ export async function POST(req: Request) {
   if (!config.geminiApiKey) {
     return Response.json({ code: "config_error", message: "Server is missing GEMINI_API_KEY" }, { status: 500 });
   }
+
+  const limited = enforceLimits(
+    req,
+    "transcribe",
+    parseLimit(config.limits.transcribePerVisitor, { max: 15, windowMs: 600_000 }),
+    parseLimit(config.limits.transcribeGlobal, { max: 200, windowMs: 3_600_000 }),
+  );
+  if (limited) return limited;
 
   const form = await req.formData().catch(() => null);
   const file = form?.get("file");
