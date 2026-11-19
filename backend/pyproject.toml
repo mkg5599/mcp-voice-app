@@ -1,28 +1,31 @@
-[tool.poetry]
+# Standard (PEP 621) project metadata. Vercel's Python builder installs dependencies from
+# [project].dependencies with uv, so they must live here (not in Poetry-only tables).
+# Keep these pins in sync with requirements.txt / requirements-dev.txt.
+[project]
 name = "backend"
-version = "0.1.0"
+version = "2.0.0"
 description = "Product catalog MCP server (FastAPI + official MCP SDK + Gemini embeddings)"
-authors = ["mkg5599 <gummadm@oregonstate.edu>"]
 readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi==0.165.0",
+    "uvicorn[standard]==0.35.0",
+    "mcp==2.3.0",
+    "httpx==0.28.1",
+    "python-dotenv==1.1.1",
+]
+
+[dependency-groups]
+dev = [
+    "ruff==0.15.22",
+    "mypy==2.4.1",
+    "pytest==9.2.0",
+    "anyio==4.16.0",
+]
+
+# An application, not an installable package (no [build-system] on purpose).
+[tool.poetry]
 package-mode = false
-
-[tool.poetry.dependencies]
-python = ">=3.13,<4.0"
-fastapi = "0.165.0"
-uvicorn = {version = "0.35.0", extras = ["standard"]}
-mcp = "2.3.0"
-httpx = "0.28.1"
-python-dotenv = ">=1.0.1,<2.0.0"
-
-[tool.poetry.group.dev.dependencies]
-ruff = "^0.15.0"
-mypy = "^2.4.0"
-pytest = "^8.3.2"
-anyio = "^4.0.0"
-
-[build-system]
-requires = ["poetry-core>=1.9.0"]
-build-backend = "poetry.core.masonry.api"
 
 [tool.pytest.ini_options]
 pythonpath = "."
